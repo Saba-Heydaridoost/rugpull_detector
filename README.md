@@ -1,2 +1,2 @@
-# rugpull_detector
+# Rugpull Detector
 Solana Rugpull Detection using GNN
