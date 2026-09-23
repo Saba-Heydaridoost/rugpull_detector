@@ -10,7 +10,10 @@ For a single model, import directly:
     from baselines.models import random_forest
 
     data = get_data('full', 'q1', 'node', variant='with_mask')
-    result = random_forest.train(data, grid=[{'max_depth': 6, 'min_samples_leaf': 10}])
+    result = random_forest.train(data, n_trials=30)
+
+`train` tunes with Optuna and then re-runs the winner over several seeds. Pass `space=` a
+`SPACE(trial)` callable to search something other than the model's own space.
 """
 
 from . import config

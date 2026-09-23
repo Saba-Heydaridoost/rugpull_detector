@@ -1,7 +1,11 @@
 """Baseline registry.
 
-Each model lives in its own module exposing `NAME`, `GRID`, `build` and `train`. To add a
+Each model lives in its own module exposing `NAME`, `SPACE`, `build` and `train`. To add a
 baseline, write the module and add it to `REGISTRY` below — nothing else needs to change.
+
+`SPACE(trial)` is the Optuna search space: it draws from `trial` and returns the parameter
+dict `build` consumes. A module may also set `N_TRIALS` to override `config.N_TRIALS` for
+itself, which the torch baselines do because each of their trials trains a network.
 """
 
 from . import (

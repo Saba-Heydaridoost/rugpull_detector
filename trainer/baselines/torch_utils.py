@@ -19,7 +19,7 @@ except ImportError:
     DEVICE = 'cpu'
 
 
-# Keys forwarded from a grid entry to the training loop rather than the architecture.
+# Keys forwarded from a parameter dict to the training loop rather than the architecture.
 TRAIN_KEYS = ['lr', 'weight_decay', 'epochs', 'batch_size', 'patience']
 
 
@@ -117,5 +117,5 @@ def train_torch_model(net_factory, data, seed, lr=1e-3, weight_decay=1e-5,
 
 
 def torch_train_kwargs(params):
-    """Split the training-loop keys out of a grid entry."""
+    """Split the training-loop keys out of a parameter dict."""
     return {k: params[k] for k in TRAIN_KEYS if k in params}

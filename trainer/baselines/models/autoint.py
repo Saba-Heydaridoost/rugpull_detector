@@ -18,14 +18,23 @@ from ..torch_utils import (
 
 NAME = 'autoint'
 
-GRID = [
-    {'d_token': d, 'n_layers': n, 'n_heads': 4, 'dropout': dr,
-     'lr': lr, 'weight_decay': 1e-5, 'batch_size': 128}
-    for d in [16, 32, 64]
-    for n in [1, 2, 3]
-    for dr in [0.1, 0.3]
-    for lr in [1e-3, 3e-4]
-]
+N_TRIALS = 40
+
+# As in the FT-Transformer, d_token must divide evenly by the head count.
+N_HEADS = 4
+
+
+def SPACE(trial):
+    return {
+        'd_token': trial.suggest_categorical('d_token', [16, 32, 64]),
+        'n_layers': trial.suggest_int('n_layers', 1, 3),
+        'n_heads': N_HEADS,
+        'dropout': trial.suggest_float('dropout', 0.0, 0.4),
+        'lr': trial.suggest_float('lr', 1e-4, 3e-3, log=True),
+        'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-2, log=True),
+        'batch_size': trial.suggest_categorical('batch_size', [64, 128, 256]),
+    }
+
 
 if HAS_TORCH:
     import torch
@@ -72,10 +81,11 @@ def build(params):
     )
 
 
-def train(data, grid=None, n_seeds=None, **kw):
+def train(data, space=None, n_trials=None, n_seeds=None, **kw):
     require_torch(NAME)
 
     def make_predictor(params, d, seed):
         return train_torch_model(build(params), d, seed, **torch_train_kwargs(params))
 
-    return evaluate(NAME, make_predictor, grid or GRID, data, n_seeds=n_seeds, **kw)
+    return evaluate(NAME, make_predictor, space or SPACE, data,
+                    n_trials=n_trials or N_TRIALS, n_seeds=n_seeds, **kw)

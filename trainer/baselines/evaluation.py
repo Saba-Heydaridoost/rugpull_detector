@@ -1,9 +1,9 @@
 """The shared evaluation routine used by every baseline.
 
 A model file supplies a `make_predictor(params, data, seed)` callable that returns a
-function mapping a design matrix to P(rug). Everything downstream — grid sweep, seed
-repetition, thresholding, scoring, persistence, plotting — is identical across models so
-the reported table is comparable.
+function mapping a design matrix to P(rug), plus a `SPACE(trial)` describing what may be
+tuned. Everything downstream — Optuna search, seed repetition, thresholding, scoring,
+persistence, plotting — is identical across models so the reported table is comparable.
 
 Each seed is scored on the training partition as well as validation. The training score is
 not a performance claim; it exists so the train-validation gap can be read directly, which
@@ -13,10 +13,27 @@ is the clearest overfitting signal available while the held-out partition stays 
 import numpy as np
 import pandas as pd
 
+try:
+    import optuna
+
+    HAS_OPTUNA = True
+except ImportError:
+    HAS_OPTUNA = False
+
 from . import config
 from .metrics import compute_metrics, safe_auc, select_threshold
 from .plotting import plot_train_val
 from .reporting import append_summary, save_table
+
+
+def require_optuna():
+    if not HAS_OPTUNA:
+        raise ImportError(
+            'hyperparameter search requires optuna, which is not installed '
+            '(pip install optuna)'
+        )
+
+    return optuna
 
 
 def sklearn_predictor(builder, params, data, seed):
@@ -53,9 +70,9 @@ def overfitting_report(runs, metrics=None):
     """Train minus validation, per metric, averaged over seeds.
 
     A large positive gap means the selected configuration fits the training partition far
-    better than it generalises. This does not capture selection overfitting: the grid was
-    chosen on validation, so the validation score is itself optimistic. Only the frozen
-    test partition can settle that.
+    better than it generalises. This does not capture selection overfitting: the
+    configuration was chosen on validation, so the validation score is itself optimistic.
+    Only the frozen test partition can settle that.
     """
     metrics = metrics or ['roc_auc', 'pr_auc', 'recall', 'precision', 'f1']
 
@@ -68,44 +85,94 @@ def overfitting_report(runs, metrics=None):
     return pd.DataFrame(rows)
 
 
-def sweep_grid(name, make_predictor, grid, data, verbose=True):
-    """Score every configuration on validation ROC-AUC and return the ranked table."""
+def search(name, make_predictor, space, data, n_trials=None, verbose=True):
+    """Tune on validation ROC-AUC with Optuna and return the ranked trial table.
+
+    One study per dataset cell, maximising validation ROC-AUC. The sampler is seeded from
+    `config.SAMPLER_SEED`, so re-running a cell proposes the same configurations in the same
+    order and the selected hyperparameters are reproducible.
+
+    Returns `(trials, best_params)` in the same shape the grid sweep returned, so nothing
+    downstream — the saved `sweep_*.csv`, the seed re-runs, the plots — has to change.
+    """
+    optuna = require_optuna()
+    n_trials = config.N_TRIALS if n_trials is None else n_trials
+
     if verbose:
-        print(f'sweeping {len(grid)} configuration(s) on validation ROC-AUC ...')
+        print(f'tuning {n_trials} trial(s) on validation ROC-AUC with Optuna (TPE) ...')
 
-    records = []
-    best_params, best_auc = grid[0], -np.inf
+    # Every trial trains at the same fixed seed, so an identical parameter dict always
+    # scores identically. TPE does re-propose configurations it likes; caching them keeps a
+    # duplicate from costing another full fit, which matters most for the torch models.
+    scored = {}
 
-    for params in grid:
+    def objective(trial):
+        params = space(trial)
+
+        # The resolved dict, not trial.params: a space may derive a value (the MLP's hidden
+        # sizes) or hold one fixed, and it is the resolved dict that is re-fitted later.
+        # Recorded before the cache check, so a repeat proposal carries it too.
+        trial.set_user_attr('params', params)
+
+        key = str(params)
+
+        if key in scored:
+            return scored[key]
+
         try:
             predict = make_predictor(params, data, config.SEARCH_SEED)
             auc = safe_auc(data.yva, predict(data.Xva))
         except Exception as exc:
-            # A degenerate configuration should not abort the sweep.
+            # A degenerate configuration should not abort the study. Pruning it rather than
+            # returning a floor score keeps it out of the sampler's surrogate, so TPE does
+            # not learn to avoid the whole region around one unlucky combination.
             if verbose:
-                print(f'  config failed ({exc.__class__.__name__}): {params}')
-            continue
+                print(f'  trial failed ({exc.__class__.__name__}): {params}')
+            raise optuna.TrialPruned() from exc
 
-        records.append({'params': str(params), 'val_roc_auc': auc})
+        scored[key] = auc
 
-        if auc > best_auc:
-            best_auc, best_params = auc, params
+        return auc
 
-    if not records:
-        raise RuntimeError(f'every configuration failed for {name}')
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-    sweep = (
-        pd.DataFrame(records)
+    study = optuna.create_study(
+        direction='maximize',
+        sampler=optuna.samplers.TPESampler(
+            seed=config.SAMPLER_SEED, n_startup_trials=config.N_STARTUP_TRIALS
+        ),
+        study_name=f'{name}_{data.scope}_{data.experiment}_{data.view}_'
+                   f'{data.variant}_{data.cohort}',
+    )
+    study.optimize(objective, n_trials=n_trials, timeout=config.SEARCH_TIMEOUT)
+
+    completed = [t for t in study.trials
+                 if t.state == optuna.trial.TrialState.COMPLETE]
+
+    if not completed:
+        raise RuntimeError(f'every trial failed for {name}')
+
+    trials = (
+        pd.DataFrame([{'trial': t.number,
+                       'params': str(t.user_attrs['params']),
+                       'val_roc_auc': t.value}
+                      for t in completed])
         .sort_values('val_roc_auc', ascending=False)
         .reset_index(drop=True)
     )
 
-    return sweep, best_params
+    best_params = study.best_trial.user_attrs['params']
+
+    if verbose and len(completed) < len(study.trials):
+        n_failed = len(study.trials) - len(completed)
+        print(f'  {n_failed} trial(s) pruned after failing')
+
+    return trials, best_params
 
 
-def evaluate(name, make_predictor, grid, data, n_seeds=None, verbose=True,
+def evaluate(name, make_predictor, space, data, n_trials=None, n_seeds=None, verbose=True,
              save=True, plot=None):
-    """Sweep a grid on validation ROC-AUC, then re-run the winner over several seeds."""
+    """Tune on validation ROC-AUC with Optuna, then re-run the winner over several seeds."""
     n_seeds = config.N_SEEDS if n_seeds is None else n_seeds
     plot = config.MAKE_PLOTS if plot is None else plot
 
@@ -114,16 +181,27 @@ def evaluate(name, make_predictor, grid, data, n_seeds=None, verbose=True,
         print(f'{name.upper()}  {data.describe()}')
         print('=' * 100)
 
-    sweep, best_params = sweep_grid(name, make_predictor, grid, data, verbose=verbose)
+    sweep, best_params = search(name, make_predictor, space, data,
+                                n_trials=n_trials, verbose=verbose)
 
     if verbose:
         print('\ntop configurations:')
         print(sweep.head(5).to_string(index=False))
 
-        # A flat sweep means the winning score is mostly selection noise rather than a
-        # real configuration effect.
-        spread = sweep['val_roc_auc'].max() - sweep['val_roc_auc'].median()
-        print(f'\nsweep spread (best - median): {spread:.4f}')
+        # A flat search means the winning score is mostly selection noise rather than a
+        # real configuration effect. The spread is measured over the startup trials only:
+        # those are drawn quasi-randomly, so they sample the space evenly, whereas TPE
+        # deliberately concentrates its later trials near the optimum and would shrink a
+        # best-minus-median computed over the whole study for reasons that say nothing
+        # about how sensitive the model is to its hyperparameters.
+        explore = sweep.loc[sweep['trial'] < config.N_STARTUP_TRIALS, 'val_roc_auc']
+
+        if len(explore) >= 3:
+            spread = explore.max() - explore.median()
+            print(f'\nexploration spread over {len(explore)} random trials '
+                  f'(best - median): {spread:.4f}')
+
+        print(f'\n{len(sweep)} trial(s) completed, best {sweep["val_roc_auc"].max():.4f}')
         print(f'selected: {best_params}')
         print(f're-running over {n_seeds} seed(s) ...')
 

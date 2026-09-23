@@ -5,13 +5,29 @@ from ..torch_utils import HAS_TORCH, require_torch, torch_train_kwargs, train_to
 
 NAME = 'mlp'
 
-GRID = [
-    {'hidden': h, 'dropout': dr, 'lr': lr, 'weight_decay': wd, 'batch_size': 128}
-    for h in [(64,), (128, 64), (256, 128), (256, 128, 64)]
-    for dr in [0.1, 0.3, 0.5]
-    for lr in [1e-3, 3e-4]
-    for wd in [1e-5, 1e-3]
-]
+# The torch baselines are the expensive ones, so they get a smaller budget than the
+# default. Each trial trains a network to early stopping.
+N_TRIALS = 40
+
+
+def SPACE(trial):
+    """Depth and width are drawn separately and composed into a halving stack.
+
+    The grid enumerated four hand-written shapes; drawing (depth, width) reaches the same
+    family — (64,), (128, 64), (256, 128, 64) — plus the widths between them, without
+    needing a categorical over tuples.
+    """
+    n_layers = trial.suggest_int('n_layers', 1, 3)
+    width = trial.suggest_categorical('width', [64, 128, 256])
+
+    return {
+        'hidden': tuple(max(16, width // 2 ** i) for i in range(n_layers)),
+        'dropout': trial.suggest_float('dropout', 0.0, 0.5),
+        'lr': trial.suggest_float('lr', 1e-4, 3e-3, log=True),
+        'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-2, log=True),
+        'batch_size': trial.suggest_categorical('batch_size', [64, 128, 256]),
+    }
+
 
 if HAS_TORCH:
     import torch.nn as nn
@@ -44,10 +60,11 @@ def build(params):
     )
 
 
-def train(data, grid=None, n_seeds=None, **kw):
+def train(data, space=None, n_trials=None, n_seeds=None, **kw):
     require_torch(NAME)
 
     def make_predictor(params, d, seed):
         return train_torch_model(build(params), d, seed, **torch_train_kwargs(params))
 
-    return evaluate(NAME, make_predictor, grid or GRID, data, n_seeds=n_seeds, **kw)
+    return evaluate(NAME, make_predictor, space or SPACE, data,
+                    n_trials=n_trials or N_TRIALS, n_seeds=n_seeds, **kw)

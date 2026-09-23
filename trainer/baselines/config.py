@@ -1,8 +1,8 @@
 """Central configuration for the baseline experiments.
 
 Everything that defines *what* is trained lives here: paths, the predictor set for each
-dataset view, and the evaluation protocol. Model hyperparameter grids live next to their
-model in `baselines/models/`.
+dataset view, and the evaluation protocol. Model hyperparameter search spaces live next to
+their model in `baselines/models/`.
 """
 
 import os
@@ -140,13 +140,44 @@ VARIANTS = [
 
 
 # =============================================================================
+# Hyperparameter search
+# =============================================================================
+#
+# Tuning is an Optuna study per (model, cohort, experiment, view, variant) cell, maximising
+# validation ROC-AUC with the TPE sampler. The search space lives next to its model in
+# `baselines/models/` as a `SPACE(trial)` function.
+#
+# This replaces the exhaustive grid sweep the baselines used previously. The practical
+# difference is that continuous hyperparameters (learning rates, regularisation strengths,
+# subsample fractions) are now sampled from a range instead of being pinned to a handful of
+# values, and the trial budget is set directly rather than falling out of the product of the
+# grid axes.
+
+# Trials per study, unless the model overrides it with its own `N_TRIALS`.
+N_TRIALS = 60
+
+# Sampler seed. Fixed so that re-running a cell proposes the same configurations in the same
+# order and the selected hyperparameters are reproducible.
+SAMPLER_SEED = 0
+
+# Trials drawn quasi-randomly before TPE starts modelling the objective. Below roughly a
+# dozen, TPE is fitting its surrogate to too little data to beat random search.
+N_STARTUP_TRIALS = 15
+
+# Wall-clock cap per study, in seconds. None for no cap. A study stops at whichever of
+# N_TRIALS and this limit comes first, which is the practical brake on the torch models.
+SEARCH_TIMEOUT = None
+
+
+# =============================================================================
 # Evaluation protocol
 # =============================================================================
 
 # Seeds used to re-run the validation-selected configuration.
 N_SEEDS = 5
 
-# Single seed used during the hyperparameter sweep.
+# Single seed used to train each trial during the search. The winner is re-run over
+# N_SEEDS afterwards, so search cost stays linear in the trial count.
 SEARCH_SEED = 0
 
 # The held-out partition stays frozen until the graph models are finalised as well, so
@@ -155,6 +186,15 @@ EVALUATE_TEST = False
 
 # Minimum training rows before a configuration is attempted.
 MIN_TRAIN_ROWS = 20
+
+# Threads for the estimators that parallelise their own fit (random forest, XGBoost).
+#
+# Not -1. These cohorts are a few hundred to a few thousand rows over five to ten
+# predictors, and on a many-core machine the per-round thread synchronisation costs more
+# than the work it distributes: measured on the q1 original cohort (1367 x 10), a 300-tree
+# XGBoost fit takes 74.8s with one thread per core against 0.15s at eight. Raise it only
+# if the training partitions grow by orders of magnitude.
+N_JOBS = 8
 
 
 # =============================================================================
