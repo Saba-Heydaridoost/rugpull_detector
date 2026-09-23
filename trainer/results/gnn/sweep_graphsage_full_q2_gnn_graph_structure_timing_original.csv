@@ -1,0 +1,2 @@
+trial,params,val_roc_auc
+0,"{'hidden_dim': 64, 'n_layers': 2, 'dropout': 0.21182739966945235, 'pooling': 'add', 'lr': 0.0026512259742974293, 'weight_decay': 3.417952912061011e-05, 'batch_size': 4}",0.870884929024464

@@ -6,30 +6,39 @@ Each architecture exposes:
     SPACE(trial)
     build(params)
     train(data, ...)
+
+Model modules are imported lazily so the package itself can still be
+inspected when optional PyTorch Geometric dependencies are unavailable.
 """
 
-from . import (
-    gat,
-    gcn,
-    graphsage,
-)
+from importlib import import_module
 
 
-REGISTRY = {
-    gcn.NAME:
-        gcn,
-
-    graphsage.NAME:
-        graphsage,
-
-    gat.NAME:
-        gat,
+MODEL_MODULES = {
+    'gcn': '.gcn',
+    'graphsage': '.graphsage',
+    'gat': '.gat',
 }
 
+REGISTRY = {
+    name: None
+    for name in MODEL_MODULES
+}
 
 ALL_MODELS = list(
-    REGISTRY
+    MODEL_MODULES
 )
+
+
+def _validate_name(
+    name,
+):
+    if name not in MODEL_MODULES:
+        raise KeyError(
+            f'unknown GNN model '
+            f'{name!r}; '
+            f'available: {ALL_MODELS}'
+        )
 
 
 def get(
@@ -37,12 +46,15 @@ def get(
 ):
     """Return one registered GNN model module."""
 
-    if name not in REGISTRY:
+    _validate_name(
+        name
+    )
 
-        raise KeyError(
-            f'unknown GNN model '
-            f'{name!r}; '
-            f'available: {ALL_MODELS}'
+    if REGISTRY[name] is None:
+
+        REGISTRY[name] = import_module(
+            MODEL_MODULES[name],
+            package=__package__,
         )
 
     return REGISTRY[name]
@@ -51,9 +63,11 @@ def get(
 def is_available(
     name,
 ):
-    """Check whether PyTorch Geometric is installed."""
+    """Whether the optional PyTorch Geometric dependency is available."""
 
-    get(name)
+    _validate_name(
+        name
+    )
 
     from ..torch_utils import (
         HAS_PYG,

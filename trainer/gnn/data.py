@@ -17,14 +17,23 @@ Parallel edges are preserved. This is intentional: repeated recovered
 transfer rows between the same ordered endpoint pair are distinct
 observations in the exported graph.
 
-Initial features
+Primary features
 ----------------
-No amount- or price-based feature is used.
+The primary GNN experiment uses structural and temporal information.
+
+Canonical normalized transfer amounts are available in the frozen EDA
+edge artifacts, but absolute token amounts are intentionally excluded
+from the primary GNN representation because decimal normalization alone
+does not make transfer quantities economically comparable across token
+mints.
+
+Any future amount-aware experiment must be defined as a separate model
+variant rather than silently changing the primary representation.
 
 Node features are structural/temporal quantities derived only from the
 current token's recovered transfers inside its observation window.
 
-The edge attribute currently contains only `t_frac`.
+The stored edge attribute currently contains only `t_frac`.
 
 Preprocessing
 -------------
@@ -493,12 +502,36 @@ def load_graphs(
     _check_artifact(meta_path)
     _check_artifact(edge_path)
 
+    meta_columns = [
+        config.LP_COL,
+        config.TOKEN_COL,
+        config.CREATION_TIME_COL,
+        config.LABEL_COL,
+        config.SPLIT_COL,
+    ]
+
+    edge_columns = [
+        config.TOKEN_COL,
+        config.SOURCE_COL,
+        config.TARGET_COL,
+        config.EDGE_TIME_COL,
+        config.SPLIT_COL,
+        'timestamp',
+        'tx_signature',
+    ]
+
     meta = _normalise_split(
-        pd.read_parquet(meta_path)
+        pd.read_parquet(
+            meta_path,
+            columns=meta_columns,
+        )
     )
 
     edges = _normalise_split(
-        pd.read_parquet(edge_path)
+        pd.read_parquet(
+            edge_path,
+            columns=edge_columns,
+        )
     )
 
     # -----------------------------------------------------------------
@@ -839,6 +872,12 @@ class NodeFeaturePreprocessor:
                 'node feature dimension changed after fitting'
             )
 
+        if not np.isfinite(X).all():
+            raise AssertionError(
+                'raw node features contain non-finite values '
+                'before preprocessing'
+            )
+
         if self.transform_name == 'quantile':
             Xt = self.scaler_.transform(X)
 
@@ -847,12 +886,11 @@ class NodeFeaturePreprocessor:
                 X - self.mu_
             ) / self.sd_
 
-        Xt = np.nan_to_num(
-            Xt,
-            nan=0.0,
-            posinf=0.0,
-            neginf=0.0,
-        )
+        if not np.isfinite(Xt).all():
+            raise FloatingPointError(
+                'node-feature preprocessing produced '
+                'non-finite values'
+            )
 
         out = graph.clone()
 
@@ -1025,10 +1063,62 @@ def get_data(
             f'{q}/{cohort}: empty training graph partition'
         )
 
+    y_train_raw = np.array(
+        [
+            int(graph.y.item())
+            for graph in train_raw
+        ],
+        dtype=int,
+    )
+
+    if len(np.unique(y_train_raw)) < 2:
+        raise ValueError(
+            f'{q}/{cohort}: training partition '
+            'does not contain both classes'
+        )
+
     if not val_raw:
         raise ValueError(
             f'{q}/{cohort}: empty validation graph partition'
         )
+
+    y_val_raw = np.array(
+        [
+            int(graph.y.item())
+            for graph in val_raw
+        ],
+        dtype=int,
+    )
+
+    if len(np.unique(y_val_raw)) < 2:
+        raise ValueError(
+            f'{q}/{cohort}: validation partition '
+            'does not contain both classes; '
+            'validation ROC-AUC is undefined'
+        )
+
+    if config.EVALUATE_TEST:
+
+        if not test_raw:
+            raise ValueError(
+                f'{q}/{cohort}: empty test graph partition '
+                'with EVALUATE_TEST=True'
+            )
+
+        y_test_raw = np.array(
+            [
+                int(graph.y.item())
+                for graph in test_raw
+            ],
+            dtype=int,
+        )
+
+        if len(np.unique(y_test_raw)) < 2:
+            raise ValueError(
+                f'{q}/{cohort}: test partition '
+                'does not contain both classes; '
+                'test ROC-AUC is undefined'
+            )
 
     preprocessor = (
         NodeFeaturePreprocessor()

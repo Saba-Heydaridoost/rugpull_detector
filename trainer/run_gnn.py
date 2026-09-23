@@ -20,7 +20,6 @@ Examples:
 """
 
 import argparse
-import traceback
 
 from gnn import config
 
@@ -108,8 +107,46 @@ def run(
         else n_trials
     )
 
-    for name in models:
-        get(name)
+    unknown_models = [
+        name
+        for name in models
+        if name not in ALL_MODELS
+    ]
+
+    if unknown_models:
+        raise ValueError(
+            f'unknown GNN model(s): {unknown_models}; '
+            f'available: {ALL_MODELS}'
+        )
+
+    if (
+        n_trials is not None
+        and n_trials < 1
+    ):
+        raise ValueError(
+            'n_trials must be at least 1'
+        )
+
+    if (
+        n_seeds is not None
+        and n_seeds < 1
+    ):
+        raise ValueError(
+            'n_seeds must be at least 1'
+        )
+
+    unavailable_models = [
+        name
+        for name in models
+        if not is_available(name)
+    ]
+
+    if unavailable_models:
+        raise ImportError(
+            'The following selected GNN model(s) require '
+            'torch and torch_geometric: '
+            f'{unavailable_models}'
+        )
 
     results = {}
 
@@ -137,52 +174,28 @@ def run(
 
             for name in models:
 
-                if not is_available(
-                    name
-                ):
+                result = (
+                    get(name)
+                    .train(
+                        data,
 
-                    print(
-                        f'\nskipping {name}: '
-                        'torch/torch_geometric '
-                        'not installed'
+                        space=(
+                            space_overrides
+                            .get(name)
+                        ),
+
+                        n_trials=n_trials,
+                        n_seeds=n_seeds,
                     )
+                )
 
-                    continue
-
-                try:
-
-                    result = (
-                        get(name)
-                        .train(
-                            data,
-
-                            space=(
-                                space_overrides
-                                .get(name)
-                            ),
-
-                            n_trials=n_trials,
-                            n_seeds=n_seeds,
-                        )
+                results[
+                    (
+                        cohort,
+                        q,
+                        name,
                     )
-
-                    results[
-                        (
-                            cohort,
-                            q,
-                            name,
-                        )
-                    ] = result
-
-                except Exception:
-
-                    print(
-                        f'\n{name} failed on '
-                        f'[{cohort}] '
-                        f'{data.describe()}'
-                    )
-
-                    traceback.print_exc()
+                ] = result
 
     return results
 

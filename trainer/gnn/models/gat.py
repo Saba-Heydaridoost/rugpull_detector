@@ -285,8 +285,9 @@ def train(
         space or SPACE,
         data,
         n_trials=(
-            n_trials
-            or N_TRIALS
+            N_TRIALS
+            if n_trials is None
+            else n_trials
         ),
         n_seeds=n_seeds,
         **kw,

@@ -69,8 +69,14 @@ COHORTS = [
 # GNN is a graph-level view over the recovered transfer graph.
 VIEW = 'gnn_graph'
 
-# Initial experiment uses structure/timing only.
-# No amount- or price-based edge attributes yet.
+# Primary GNN experiment uses structural and temporal information.
+#
+# Canonical normalized transfer amounts are available in the frozen
+# edge artifacts, but absolute token quantities are intentionally not
+# used in the primary model because decimal normalization alone does
+# not make amounts economically comparable across token mints.
+#
+# Amount-aware models, if evaluated later, must use a separate variant.
 VARIANT = 'structure_timing'
 
 
@@ -127,8 +133,13 @@ NODE_FEATURES = [
     'mean_t_frac',
 ]
 
-# Stored in each PyG graph for later edge-aware architectures.
-# GCN / GraphSAGE need not consume edge_attr.
+# Stored edge attributes available to the graph object.
+#
+# The current GCN / GraphSAGE / GAT implementations do not directly
+# consume edge_attr; temporal information still enters the primary GNN
+# through the endpoint-level first_t_frac / mean_t_frac node features.
+#
+# Do NOT add log1p_amount_token here for the primary experiment.
 EDGE_FEATURES = [
     EDGE_TIME_COL,
 ]

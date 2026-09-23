@@ -15,7 +15,6 @@ The held-out test partition remains frozen unless explicitly enabled in
 config.
 """
 
-import numpy as np
 import pandas as pd
 
 try:

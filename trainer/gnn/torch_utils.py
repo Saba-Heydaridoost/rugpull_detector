@@ -138,9 +138,23 @@ def predict_graphs(
                 batch
             )
 
+            if not torch.isfinite(
+                logits
+            ).all():
+                raise FloatingPointError(
+                    'non-finite logits during GNN inference'
+                )
+
             probs = torch.sigmoid(
                 logits
             )
+
+            if not torch.isfinite(
+                probs
+            ).all():
+                raise FloatingPointError(
+                    'non-finite probabilities during GNN inference'
+                )
 
             probabilities.append(
                 probs
