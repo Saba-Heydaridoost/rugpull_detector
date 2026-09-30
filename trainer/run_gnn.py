@@ -56,6 +56,14 @@ COHORTS = list(
     config.COHORTS
 )
 
+TOKEN_VARIANTS = list(
+    config.TOKEN_VARIANTS
+)
+
+COMPLETE_CASE_VARIANTS = list(
+    config.COMPLETE_CASE_VARIANTS
+)
+
 # None -> use each model's own N_TRIALS.
 N_TRIALS = None
 
@@ -64,11 +72,28 @@ N_TRIALS = None
 # Driver
 # =============================================================================
 
+def variants_for(
+    cohort,
+    variants,
+):
+    """Drop the redundant missingness-mask variant for complete-case data."""
+
+    if cohort == 'complete_case':
+        return [
+            variant
+            for variant in variants
+            if variant
+            in COMPLETE_CASE_VARIANTS
+        ]
+
+    return variants
+
 def run(
     models=None,
     scope=None,
     experiments=None,
     cohorts=None,
+    variants=None,
     space_overrides=None,
     n_trials=None,
     n_seeds=None,
@@ -93,6 +118,11 @@ def run(
     cohorts = (
         cohorts
         or COHORTS
+    )
+
+    variants = (
+        variants
+        or TOKEN_VARIANTS
     )
 
     space_overrides = (
@@ -154,48 +184,55 @@ def run(
 
         for q in experiments:
 
-            data = get_data(
-                scope,
-                q,
+            for variant in variants_for(
                 cohort,
-            )
+                variants,
+            ):
 
-            if not data.usable:
-
-                print(
-                    '\nskipping '
-                    f'[{cohort}] '
-                    f'{data.describe()} '
-                    '- insufficient '
-                    'training data'
+                data = get_data(
+                    scope,
+                    q,
+                    cohort,
+                    variant=variant,
                 )
 
-                continue
+                if not data.usable:
 
-            for name in models:
-
-                result = (
-                    get(name)
-                    .train(
-                        data,
-
-                        space=(
-                            space_overrides
-                            .get(name)
-                        ),
-
-                        n_trials=n_trials,
-                        n_seeds=n_seeds,
+                    print(
+                        '\nskipping '
+                        f'[{cohort}] '
+                        f'{data.describe()} '
+                        '- insufficient '
+                        'training data'
                     )
-                )
 
-                results[
-                    (
-                        cohort,
-                        q,
-                        name,
+                    continue
+
+                for name in models:
+
+                    result = (
+                        get(name)
+                        .train(
+                            data,
+
+                            space=(
+                                space_overrides
+                                .get(name)
+                            ),
+
+                            n_trials=n_trials,
+                            n_seeds=n_seeds,
+                        )
                     )
-                ] = result
+
+                    results[
+                        (
+                            cohort,
+                            q,
+                            variant,
+                            name,
+                        )
+                    ] = result
 
     return results
 
@@ -238,6 +275,13 @@ def main():
         nargs='+',
         default=None,
         choices=config.COHORTS,
+    )
+
+    parser.add_argument(
+        '--variants',
+        nargs='+',
+        default=None,
+        choices=config.TOKEN_VARIANTS,
     )
 
     parser.add_argument(
@@ -290,6 +334,7 @@ def main():
         experiments=args.experiments,
         cohorts=args.cohorts,
         n_trials=args.trials,
+        variants=args.variants,
         n_seeds=args.seeds,
     )
 

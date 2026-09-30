@@ -19,21 +19,18 @@ observations in the exported graph.
 
 Primary features
 ----------------
-The primary GNN experiment uses structural and temporal information.
+The GNN encoder uses structural and temporal information derived from
+the recovered transfer graph.
+
+The same token-level predictors used by the matched tabular baseline
+are processed independently and concatenated with the pooled graph
+embedding immediately before graph-level classification.
 
 Canonical normalized transfer amounts are available in the frozen EDA
 edge artifacts, but absolute token amounts are intentionally excluded
 from the primary GNN representation because decimal normalization alone
 does not make transfer quantities economically comparable across token
 mints.
-
-Any future amount-aware experiment must be defined as a separate model
-variant rather than silently changing the primary representation.
-
-Node features are structural/temporal quantities derived only from the
-current token's recovered transfers inside its observation window.
-
-The stored edge attribute currently contains only `t_frac`.
 
 Preprocessing
 -------------
@@ -317,7 +314,12 @@ def _node_feature_frame(edges, node_order):
 # One token -> one PyG graph
 # =============================================================================
 
-def _build_graph(edges, sample_id, label):
+def _build_graph(
+    edges,
+    sample_id,
+    label,
+    token_features,
+):
     """Convert one token's retained recovered edges into a PyG Data object."""
 
     require_pyg()
@@ -428,6 +430,13 @@ def _build_graph(edges, sample_id, label):
             edge_attr,
             dtype=torch.float32,
         ),
+        token_features=torch.tensor(
+            np.asarray(
+                token_features,
+                dtype=np.float64,
+            ).reshape(1, -1),
+            dtype=torch.float64,
+        ),
         y=torch.tensor(
             [float(label)],
             dtype=torch.float32,
@@ -499,8 +508,14 @@ def load_graphs(
         config.EDGE_FILE,
     )
 
+    node_path = os.path.join(
+        folder,
+        config.COHORT_NODE_FILES[cohort],
+    )
+
     _check_artifact(meta_path)
     _check_artifact(edge_path)
+    _check_artifact(node_path)
 
     meta_columns = [
         config.LP_COL,
@@ -520,6 +535,15 @@ def load_graphs(
         'tx_signature',
     ]
 
+    node_columns = [
+        config.LP_COL,
+        config.TOKEN_COL,
+        config.LABEL_COL,
+        config.SPLIT_COL,
+    ] + list(
+        config.TOKEN_FEATURES
+    )
+
     meta = _normalise_split(
         pd.read_parquet(
             meta_path,
@@ -531,6 +555,13 @@ def load_graphs(
         pd.read_parquet(
             edge_path,
             columns=edge_columns,
+        )
+    )
+
+    token_frame = _normalise_split(
+        pd.read_parquet(
+            node_path,
+            columns=node_columns,
         )
     )
 
@@ -554,6 +585,15 @@ def load_graphs(
         config.SPLIT_COL,
     ]
 
+    required_token_columns = [
+        config.LP_COL,
+        config.TOKEN_COL,
+        config.LABEL_COL,
+        config.SPLIT_COL,
+    ] + list(
+        config.TOKEN_FEATURES
+    )
+
     _check_columns(
         meta,
         required_meta,
@@ -564,6 +604,12 @@ def load_graphs(
         edges,
         required_edges,
         edge_path,
+    )
+
+    _check_columns(
+        token_frame,
+        required_token_columns,
+        node_path,
     )
 
     # -----------------------------------------------------------------
@@ -595,6 +641,15 @@ def load_graphs(
         .reset_index(drop=True)
     )
 
+    token_frame = (
+        token_frame[
+            token_frame[config.SPLIT_COL]
+            .isin(config.VALID_SPLITS)
+        ]
+        .copy()
+        .reset_index(drop=True)
+    )
+
     # -----------------------------------------------------------------
     # Integrity checks
     # -----------------------------------------------------------------
@@ -602,6 +657,105 @@ def load_graphs(
     if meta[config.TOKEN_COL].duplicated().any():
         raise AssertionError(
             'graph metadata contains duplicate token_mint rows'
+        )
+
+    if token_frame[config.TOKEN_COL].duplicated().any():
+        raise AssertionError(
+            'token-level feature table contains duplicate token_mint rows'
+        )
+
+    token_frame_tokens = set(
+        token_frame[config.TOKEN_COL]
+    )
+
+    missing_token_features = (
+        set(meta[config.TOKEN_COL])
+        - token_frame_tokens
+    )
+
+    if missing_token_features:
+        raise AssertionError(
+            'token-level features are missing for '
+            f'{len(missing_token_features)} graph token(s)'
+        )
+
+    token_frame_indexed = (
+        token_frame
+        .set_index(config.TOKEN_COL)
+    )
+
+    aligned_token_frame = (
+        token_frame_indexed
+        .reindex(
+            meta[config.TOKEN_COL]
+            .tolist()
+        )
+    )
+
+    if not (
+        aligned_token_frame[
+            config.SPLIT_COL
+        ].to_numpy()
+        ==
+        meta[
+            config.SPLIT_COL
+        ].to_numpy()
+    ).all():
+        raise AssertionError(
+            'token-level and graph split assignments disagree'
+        )
+
+    if not (
+        aligned_token_frame[
+            config.LABEL_COL
+        ].astype(int).to_numpy()
+        ==
+        meta[
+            config.LABEL_COL
+        ].astype(int).to_numpy()
+    ).all():
+        raise AssertionError(
+            'token-level and graph labels disagree'
+        )
+
+    if not (
+        aligned_token_frame[
+            config.LP_COL
+        ].astype(str).to_numpy()
+        ==
+        meta[
+            config.LP_COL
+        ].astype(str).to_numpy()
+    ).all():
+        raise AssertionError(
+            'token-level and graph lp_address metadata disagree'
+        )
+
+    token_values = (
+        aligned_token_frame[
+            config.TOKEN_FEATURES
+        ]
+        .to_numpy(dtype=float)
+    )
+
+    if np.isinf(token_values).any():
+        raise AssertionError(
+            'token-level predictors contain infinite values'
+        )
+
+    if (
+        cohort == 'complete_case'
+        and np.isnan(token_values).any()
+    ):
+        raise AssertionError(
+            'complete_case contains missing token-level predictors'
+        )
+
+    for feature in config.TOKEN_FEATURES:
+        meta[feature] = (
+            aligned_token_frame[
+                feature
+            ].to_numpy()
         )
 
     if not meta[config.LABEL_COL].isin([0, 1]).all():
@@ -731,6 +885,13 @@ def load_graphs(
             token_edges,
             sample_id=sample_id,
             label=int(row[config.LABEL_COL]),
+            token_features=(
+                row[
+                    config.TOKEN_FEATURES
+                ]
+                .astype(float)
+                .to_numpy()
+            ),
         )
 
         graphs.append(graph)
@@ -908,6 +1069,224 @@ class NodeFeaturePreprocessor:
         ]
 
 
+class TokenFeaturePreprocessor:
+    """Train-fitted preprocessing for graph-level token predictors.
+
+    This intentionally mirrors the tabular baseline preprocessing:
+    training-only median imputation, the same numerical transform,
+    and an optional missingness-indicator vector.
+    """
+
+    def __init__(
+        self,
+        add_mask=True,
+        transform=None,
+    ):
+        self.add_mask = add_mask
+
+        self.transform_name = (
+            transform
+            or config.TRANSFORM
+        )
+
+    def fit(
+        self,
+        graphs,
+    ):
+        if not graphs:
+            raise ValueError(
+                'cannot fit token-feature preprocessor '
+                'on an empty graph list'
+            )
+
+        X = np.vstack(
+            [
+                graph.token_features
+                .cpu()
+                .numpy()
+                .reshape(1, -1)
+                for graph in graphs
+            ]
+        ).astype(np.float64)
+
+        if X.shape[1] != len(
+            config.TOKEN_FEATURES
+        ):
+            raise AssertionError(
+                'unexpected raw token-feature dimension'
+            )
+
+        self.columns_ = list(
+            config.TOKEN_FEATURES
+        )
+
+        frame = pd.DataFrame(
+            X,
+            columns=self.columns_,
+        )
+
+        self.median_ = (
+            frame
+            .median(numeric_only=True)
+            .reindex(self.columns_)
+            .fillna(0.0)
+        )
+
+        Xi = (
+            frame
+            .fillna(self.median_)
+            .fillna(0.0)
+            .to_numpy(dtype=np.float64)
+        )
+
+        if self.transform_name == 'quantile':
+
+            self.scaler_ = QuantileTransformer(
+                n_quantiles=max(
+                    10,
+                    min(
+                        1000,
+                        Xi.shape[0],
+                    ),
+                ),
+                output_distribution='normal',
+                subsample=10 ** 9,
+                random_state=0,
+            )
+
+            self.scaler_.fit(
+                Xi
+            )
+
+        elif self.transform_name == 'standard':
+
+            self.mu_ = Xi.mean(
+                axis=0
+            )
+
+            sd = Xi.std(
+                axis=0
+            )
+
+            self.sd_ = np.where(
+                sd < 1e-12,
+                1.0,
+                sd,
+            )
+
+        else:
+            raise ValueError(
+                f'unknown transform '
+                f'{self.transform_name!r}'
+            )
+
+        return self
+
+    def transform_graph(
+        self,
+        graph,
+    ):
+        X = (
+            graph.token_features
+            .cpu()
+            .numpy()
+            .reshape(1, -1)
+            .astype(np.float64)
+        )
+
+        frame = pd.DataFrame(
+            X,
+            columns=self.columns_,
+        )
+
+        mask = (
+            frame
+            .isna()
+            .to_numpy(dtype=np.float64)
+        )
+
+        Xi = (
+            frame
+            .fillna(self.median_)
+            .fillna(0.0)
+            .to_numpy(dtype=np.float64)
+        )
+
+        if self.transform_name == 'quantile':
+
+            Xt = self.scaler_.transform(
+                Xi
+            )
+
+        else:
+
+            Xt = (
+                Xi
+                - self.mu_
+            ) / self.sd_
+
+        if self.add_mask:
+            Xt = np.hstack(
+                [
+                    Xt,
+                    mask,
+                ]
+            )
+
+        Xt = np.nan_to_num(
+            Xt,
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+
+        if not np.isfinite(
+            Xt
+        ).all():
+            raise FloatingPointError(
+                'token-feature preprocessing produced '
+                'non-finite values'
+            )
+
+        out = graph.clone()
+
+        out.token_features = torch.tensor(
+            Xt,
+            dtype=torch.float32,
+        )
+
+        return out
+
+    def transform(
+        self,
+        graphs,
+    ):
+        return [
+            self.transform_graph(
+                graph
+            )
+            for graph in graphs
+        ]
+
+    def output_names(
+        self,
+    ):
+        if not self.add_mask:
+            return list(
+                self.columns_
+            )
+
+        return (
+            list(
+                self.columns_
+            )
+            + [
+                f'{column}__missing'
+                for column in self.columns_
+            ]
+        )
+    
+
 # =============================================================================
 # Final run data
 # =============================================================================
@@ -922,12 +1301,15 @@ class GraphRunData:
 
     node_feature_names: list
     edge_feature_names: list
+    token_feature_names: list
 
     scope: str
     experiment: str
     cohort: str
+    mask_variant: str
 
-    preprocessor: NodeFeaturePreprocessor
+    node_preprocessor: NodeFeaturePreprocessor
+    token_preprocessor: TokenFeaturePreprocessor
 
     @staticmethod
     def _labels(graphs):
@@ -941,18 +1323,24 @@ class GraphRunData:
 
     @property
     def ytr(self):
-        return self._labels(self.train_graphs)
+        return self._labels(
+            self.train_graphs
+        )
 
     @property
     def yva(self):
-        return self._labels(self.val_graphs)
+        return self._labels(
+            self.val_graphs
+        )
 
     @property
     def yte(self):
         if not self.test_graphs:
             return None
 
-        return self._labels(self.test_graphs)
+        return self._labels(
+            self.test_graphs
+        )
 
     @property
     def view(self):
@@ -960,15 +1348,28 @@ class GraphRunData:
 
     @property
     def variant(self):
-        return config.VARIANT
+        return (
+            f'{config.GRAPH_VARIANT}_'
+            f'{self.mask_variant}'
+        )
 
     @property
     def n_node_features(self):
-        return len(self.node_feature_names)
+        return len(
+            self.node_feature_names
+        )
 
     @property
     def n_edge_features(self):
-        return len(self.edge_feature_names)
+        return len(
+            self.edge_feature_names
+        )
+
+    @property
+    def n_token_features(self):
+        return len(
+            self.token_feature_names
+        )
 
     @property
     def usable(self):
@@ -1005,7 +1406,9 @@ class GraphRunData:
                 ]
             )
 
-            return float(y.mean())
+            return float(
+                y.mean()
+            )
 
         test_text = (
             f'test={len(self.test_graphs)} '
@@ -1022,8 +1425,10 @@ class GraphRunData:
             f'[{self.experiment} | '
             f'{self.scope} | '
             f'{self.view} | '
+            f'{self.variant} | '
             f'{self.cohort}] '
             f'{len(self.node_feature_names)} node features | '
+            f'{len(self.token_feature_names)} token features | '
             f'{len(self.edge_feature_names)} stored edge features | '
             f'train={len(self.train_graphs)} '
             f'(rug {rug_rate(self.train_graphs):.3f}) | '
@@ -1037,8 +1442,25 @@ def get_data(
     scope='full',
     q='q1',
     cohort='original',
+    variant='with_mask',
 ):
-    """Load graphs and fit preprocessing on the training partition only."""
+    """Load graphs and fit all numerical preprocessing on training only."""
+
+    if variant not in config.TOKEN_VARIANTS:
+        raise ValueError(
+            f'unknown token-feature variant '
+            f'{variant!r}; expected one of '
+            f'{config.TOKEN_VARIANTS}'
+        )
+
+    if (
+        cohort == 'complete_case'
+        and variant not in config.COMPLETE_CASE_VARIANTS
+    ):
+        raise ValueError(
+            'complete_case must use no_mask because '
+            'its token-level predictors contain no missing values'
+        )
 
     corpus = load_graphs(
         scope=scope,
@@ -1120,21 +1542,47 @@ def get_data(
                 'test ROC-AUC is undefined'
             )
 
-    preprocessor = (
+    node_preprocessor = (
         NodeFeaturePreprocessor()
-        .fit(train_raw)
+        .fit(
+            train_raw
+        )
     )
 
-    train_graphs = preprocessor.transform(
+    token_preprocessor = (
+        TokenFeaturePreprocessor(
+            add_mask=(
+                variant
+                == 'with_mask'
+            )
+        )
+        .fit(
+            train_raw
+        )
+    )
+
+    train_graphs = node_preprocessor.transform(
         train_raw
     )
 
-    val_graphs = preprocessor.transform(
+    val_graphs = node_preprocessor.transform(
         val_raw
     )
 
-    test_graphs = preprocessor.transform(
+    test_graphs = node_preprocessor.transform(
         test_raw
+    )
+
+    train_graphs = token_preprocessor.transform(
+        train_graphs
+    )
+
+    val_graphs = token_preprocessor.transform(
+        val_graphs
+    )
+
+    test_graphs = token_preprocessor.transform(
+        test_graphs
     )
 
     return GraphRunData(
@@ -1150,9 +1598,15 @@ def get_data(
             config.EDGE_FEATURES
         ),
 
+        token_feature_names=(
+            token_preprocessor.output_names()
+        ),
+
         scope=scope,
         experiment=q,
         cohort=cohort,
+        mask_variant=variant,
 
-        preprocessor=preprocessor,
+        node_preprocessor=node_preprocessor,
+        token_preprocessor=token_preprocessor,
     )

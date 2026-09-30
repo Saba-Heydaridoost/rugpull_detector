@@ -217,6 +217,7 @@ def train_gnn_model(
     model = net_factory(
         data.n_node_features,
         data.n_edge_features,
+        data.n_token_features,
     ).to(
         DEVICE
     )

@@ -89,6 +89,10 @@ def summarise(
                 'n_edge_features_available',
                 'first',
             ),
+            n_token_features=(
+                'n_token_features',
+                'first',
+            ),
             roc_auc_mean=(
                 'roc_auc',
                 'mean',
@@ -574,6 +578,10 @@ def evaluate(
 
             n_edge_features_available=(
                 data.n_edge_features
+            ),
+
+            n_token_features=(
+                data.n_token_features
             ),
 
             n_train=(

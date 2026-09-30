@@ -38,7 +38,12 @@ EXPERIMENTS = ['q1', 'q2', 'q3']
 # The final export covers the full dataset only; the panel scope is not part of it.
 SCOPES = ['full']
 
-VIEWS = ['node', 'graph', 'node_graph']
+VIEWS = [
+    'node',
+    'node_matched',
+    'graph',
+    'node_graph',
+]
 
 # Missingness cohorts, exported by EDA.ipynb as one folder per cohort under
 # COHORT_DIR/<cohort>/<q>/.
@@ -102,9 +107,17 @@ GRAPH_FEATURES = [
 # because the edge output cannot distinguish a completed zero-edge job from an unfinished
 # one, and recovered-edge presence is itself class-dependent.
 FEATURE_SETS = {
-    'node': NODE_FEATURES,
-    'graph': GRAPH_FEATURES,
-    'node_graph': NODE_FEATURES + GRAPH_FEATURES,
+    'node':
+        NODE_FEATURES,
+
+    'node_matched':
+        NODE_FEATURES,
+
+    'graph':
+        GRAPH_FEATURES,
+
+    'node_graph':
+        NODE_FEATURES + GRAPH_FEATURES,
 }
 
 

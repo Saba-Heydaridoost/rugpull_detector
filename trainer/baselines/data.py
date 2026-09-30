@@ -77,6 +77,11 @@ def load_view(scope='full', q='q1', view='node', features=None, cohort='original
     _check_artifact(graph_path)
     graph = pd.read_parquet(graph_path)
 
+    if graph['token_mint'].duplicated().any():
+        raise AssertionError(
+            'graph feature table contains duplicate token_mint rows'
+        )
+
     node_part = [c for c in features if c in nodes.columns]
     graph_part = [c for c in features if c not in nodes.columns]
 

@@ -26,6 +26,7 @@ from . import config
 from .data import (
     GraphRunData,
     NodeFeaturePreprocessor,
+    TokenFeaturePreprocessor,
     get_data,
     load_graphs,
 )
@@ -51,6 +52,7 @@ __all__ = [
     'config',
     'GraphRunData',
     'NodeFeaturePreprocessor',
+    'TokenFeaturePreprocessor',
     'get_data',
     'load_graphs',
     'evaluate',

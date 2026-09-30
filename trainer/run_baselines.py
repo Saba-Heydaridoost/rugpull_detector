@@ -57,8 +57,10 @@ EXPERIMENTS = ['q1', 'q2', 'q3']
 # `baselines/config.COHORT_NODE_FILES`.
 COHORTS = list(config.COHORTS)
 
-# 'node' | 'graph' | 'node_graph'
-VIEWS = ['node']
+# 'node' | 'node_matched' | 'graph' | 'node_graph'
+VIEWS = [
+    'node_matched',
+]
 
 # 'no_mask' | 'with_mask'
 VARIANTS = ['no_mask', 'with_mask']

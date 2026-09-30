@@ -69,15 +69,24 @@ COHORTS = [
 # GNN is a graph-level view over the recovered transfer graph.
 VIEW = 'gnn_graph'
 
-# Primary GNN experiment uses structural and temporal information.
+# The graph encoder continues to use the structural/temporal representation.
+# Token-level predictors are fused only after graph-level pooling, so their
+# semantics remain graph-level rather than being duplicated across endpoints.
+GRAPH_VARIANT = 'structure_timing'
+
+# Match the baseline missingness protocol exactly.
 #
-# Canonical normalized transfer amounts are available in the frozen
-# edge artifacts, but absolute token quantities are intentionally not
-# used in the primary model because decimal normalization alone does
-# not make amounts economically comparable across token mints.
-#
-# Amount-aware models, if evaluated later, must use a separate variant.
-VARIANT = 'structure_timing'
+# original and drop_3_or_more_missing are evaluated both with and without
+# explicit missingness indicators. complete_case contains no missing
+# token-level predictors, so its mask would be identically zero.
+TOKEN_VARIANTS = [
+    'no_mask',
+    'with_mask',
+]
+
+COMPLETE_CASE_VARIANTS = [
+    'no_mask',
+]
 
 
 # =============================================================================
@@ -91,6 +100,19 @@ GRAPH_META_FILE = (
 EDGE_FILE = (
     'edges_with_split.parquet'
 )
+
+# Token-level tables are the same cohort-specific artifacts used by
+# the tabular baseline pipeline.
+COHORT_NODE_FILES = {
+    'original':
+        'model_nodes_raw_nan.parquet',
+
+    'drop_3_or_more_missing':
+        'model_nodes_raw_nan.parquet',
+
+    'complete_case':
+        'model_nodes_complete_case.parquet',
+}
 
 
 # =============================================================================
@@ -131,6 +153,19 @@ NODE_FEATURES = [
     'log1p_in_neighbors',
     'first_t_frac',
     'mean_t_frac',
+]
+
+# Token-level predictors shared exactly with the tabular baseline.
+#
+# These describe the token/sample as a whole, not an individual transfer
+# endpoint. Therefore they are concatenated with the pooled graph embedding
+# immediately before the graph-level classification head.
+TOKEN_FEATURES = [
+    'volume_sell_change_percent',
+    'volume_buy_change_percent',
+    'unique_wallet_count',
+    'unique_wallet_change_percent',
+    'liquidity_at_observation_end',
 ]
 
 # Stored edge attributes available to the graph object.

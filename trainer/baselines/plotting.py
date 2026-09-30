@@ -120,8 +120,17 @@ def plot_train_val(runs, name, data, best_params, metrics=None, save=True, verbo
     return path
 
 
-def plot_model_comparison(summary, scope, experiment, view, variant,
-                          metric='pr_auc_mean', save=True, verbose=True):
+def plot_model_comparison(
+    summary,
+    scope,
+    experiment,
+    view,
+    variant,
+    cohort,
+    metric='pr_auc_mean',
+    save=True,
+    verbose=True,
+):
     """Horizontal bar chart ranking every model recorded for one dataset slice.
 
     Reads the cumulative summary, so it can be called after the models have been tuned in
@@ -133,6 +142,7 @@ def plot_model_comparison(summary, scope, experiment, view, variant,
         & (summary['view'] == view)
         & (summary['variant'] == variant)
         & (summary['partition'] == 'val')
+        & (summary['cohort'] == cohort)
     ].sort_values(metric)
 
     if subset.empty:
@@ -156,7 +166,7 @@ def plot_model_comparison(summary, scope, experiment, view, variant,
     ax.set_xlim(0, 1.1)
     ax.set_xlabel(metric.replace('_mean', '').replace('_', ' ') + ' (validation)')
     ax.set_title(
-        f'{scope} / {experiment} / {view} / {variant}', fontsize=9, loc='left'
+        f'{scope} / {experiment} / {view} / {variant} / {cohort}'
     )
     ax.spines[['top', 'right']].set_visible(False)
     ax.grid(axis='x', alpha=0.25, linewidth=0.6)
@@ -168,7 +178,7 @@ def plot_model_comparison(summary, scope, experiment, view, variant,
         os.makedirs(config.PLOT_DIR, exist_ok=True)
         path = os.path.join(
             config.PLOT_DIR,
-            f'comparison_{metric}_{scope}_{experiment}_{view}_{variant}.png',
+            f'comparison_{metric}_{scope}_{experiment}_{view}_{variant}_{cohort}.png'
         )
         fig.savefig(path, dpi=config.PLOT_DPI)
 

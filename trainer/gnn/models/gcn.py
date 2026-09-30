@@ -14,6 +14,7 @@ from ..torch_utils import (
 )
 
 from .common import (
+    fuse_token_features,
     graph_pool,
     make_mlp_head,
 )
@@ -101,6 +102,7 @@ class GCNNet(
     def __init__(
         self,
         n_node_features,
+        n_token_features,
         hidden_dim=64,
         n_layers=2,
         dropout=0.2,
@@ -134,6 +136,10 @@ class GCNNet(
         self.head = make_mlp_head(
             hidden_dim,
             dropout,
+            input_dim=(
+                hidden_dim
+                + n_token_features
+            ),
         )
 
     def forward(
@@ -167,6 +173,11 @@ class GCNNet(
             self.pooling,
         )
 
+        graph_x = fuse_token_features(
+            graph_x,
+            batch,
+        )
+
         return (
             self.head(
                 graph_x
@@ -186,9 +197,11 @@ def build(
 
     return (
         lambda n_node_features,
-               n_edge_features:
+            n_edge_features,
+            n_token_features:
         GCNNet(
             n_node_features=n_node_features,
+            n_token_features=n_token_features,
 
             hidden_dim=params.get(
                 'hidden_dim',
