@@ -59,7 +59,7 @@ COHORTS = list(config.COHORTS)
 
 # 'node' | 'node_matched' | 'graph' | 'node_graph'
 VIEWS = [
-    'node_matched',
+    'node_graph',
 ]
 
 # 'no_mask' | 'with_mask'

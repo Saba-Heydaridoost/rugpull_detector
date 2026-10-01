@@ -72,7 +72,7 @@ VIEW = 'gnn_graph'
 # The graph encoder continues to use the structural/temporal representation.
 # Token-level predictors are fused only after graph-level pooling, so their
 # semantics remain graph-level rather than being duplicated across endpoints.
-GRAPH_VARIANT = 'structure_timing'
+GRAPH_VARIANT = 'structure_timing_node_graph'
 
 # Match the baseline missingness protocol exactly.
 #
@@ -167,6 +167,31 @@ TOKEN_FEATURES = [
     'unique_wallet_change_percent',
     'liquidity_at_observation_end',
 ]
+
+# Graph-level summary predictors shared exactly with the tabular
+# `node_graph` baseline.
+GRAPH_SUMMARY_FEATURES = [
+    'n_transfers',
+    'n_endpoints',
+    'n_edges',
+    'n_senders',
+    'n_receivers',
+    'density',
+    'avg_degree',
+    'first_t_frac',
+    'mean_t_frac',
+]
+
+
+# Complete graph-level auxiliary feature set used by the primary GNN.
+#
+# This exactly matches the predictors of the tabular `node_graph`
+# baseline. The GNN additionally learns from graph topology and
+# endpoint-level node representations.
+GLOBAL_FEATURES = (
+    TOKEN_FEATURES
+    + GRAPH_SUMMARY_FEATURES
+)
 
 # Stored edge attributes available to the graph object.
 #

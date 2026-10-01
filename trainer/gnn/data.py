@@ -19,18 +19,24 @@ observations in the exported graph.
 
 Primary features
 ----------------
-The GNN encoder uses structural and temporal information derived from
-the recovered transfer graph.
+The graph encoder uses structural and temporal endpoint features derived
+only from recovered transfers inside the observation window.
 
-The same token-level predictors used by the matched tabular baseline
-are processed independently and concatenated with the pooled graph
-embedding immediately before graph-level classification.
+The primary graph-level classifier additionally receives the exact
+tabular predictors used by the matched `node_graph` baseline:
 
-Canonical normalized transfer amounts are available in the frozen EDA
-edge artifacts, but absolute token amounts are intentionally excluded
-from the primary GNN representation because decimal normalization alone
-does not make transfer quantities economically comparable across token
-mints.
+    - five token-level predictors;
+    - nine recovered-graph summary predictors.
+
+These auxiliary predictors are concatenated with the pooled graph
+embedding before classification.
+
+Thus the tabular baseline and the GNN share the same graph-level
+predictor set, while the GNN additionally learns from graph topology
+and endpoint-level representations.
+
+Canonical normalized transfer amounts remain excluded from the primary
+representation.
 
 Preprocessing
 -------------
@@ -523,7 +529,9 @@ def load_graphs(
         config.CREATION_TIME_COL,
         config.LABEL_COL,
         config.SPLIT_COL,
-    ]
+    ] + list(
+        config.GRAPH_SUMMARY_FEATURES
+    )
 
     edge_columns = [
         config.TOKEN_COL,
@@ -575,7 +583,9 @@ def load_graphs(
         config.CREATION_TIME_COL,
         config.LABEL_COL,
         config.SPLIT_COL,
-    ]
+    ] + list(
+        config.GRAPH_SUMMARY_FEATURES
+    )
 
     required_edges = [
         config.TOKEN_COL,
@@ -758,6 +768,57 @@ def load_graphs(
             ].to_numpy()
         )
 
+    graph_summary_values = (
+        meta[
+            config.GRAPH_SUMMARY_FEATURES
+        ]
+        .to_numpy(dtype=float)
+    )
+
+    if (
+        graph_summary_values.shape[1]
+        != len(config.GRAPH_SUMMARY_FEATURES)
+    ):
+        raise AssertionError(
+            'unexpected graph-summary feature dimension'
+        )
+
+    if np.isinf(
+        graph_summary_values
+    ).any():
+        raise AssertionError(
+            'graph-summary predictors contain infinite values'
+        )
+
+    if np.isnan(
+        graph_summary_values
+    ).any():
+        raise AssertionError(
+            'graph-summary predictors contain missing values'
+        )
+
+    global_values = (
+        meta[
+            config.GLOBAL_FEATURES
+        ]
+        .to_numpy(dtype=float)
+    )
+
+    if (
+        global_values.shape[1]
+        != len(config.GLOBAL_FEATURES)
+    ):
+        raise AssertionError(
+            'unexpected global feature dimension'
+        )
+
+    if np.isinf(
+        global_values
+    ).any():
+        raise AssertionError(
+            'global predictors contain infinite values'
+        )
+
     if not meta[config.LABEL_COL].isin([0, 1]).all():
         raise AssertionError(
             'graph metadata contains non-binary labels'
@@ -887,7 +948,7 @@ def load_graphs(
             label=int(row[config.LABEL_COL]),
             token_features=(
                 row[
-                    config.TOKEN_FEATURES
+                    config.GLOBAL_FEATURES
                 ]
                 .astype(float)
                 .to_numpy()
@@ -1070,11 +1131,10 @@ class NodeFeaturePreprocessor:
 
 
 class TokenFeaturePreprocessor:
-    """Train-fitted preprocessing for graph-level token predictors.
+    """Train-fitted preprocessing for graph-level auxiliary predictors.
 
-    This intentionally mirrors the tabular baseline preprocessing:
-    training-only median imputation, the same numerical transform,
-    and an optional missingness-indicator vector.
+    This includes the token-level and graph-summary predictors used by
+    the matched `node_graph` tabular baseline.
     """
 
     def __init__(
@@ -1110,14 +1170,14 @@ class TokenFeaturePreprocessor:
         ).astype(np.float64)
 
         if X.shape[1] != len(
-            config.TOKEN_FEATURES
+            config.GLOBAL_FEATURES
         ):
             raise AssertionError(
                 'unexpected raw token-feature dimension'
             )
 
         self.columns_ = list(
-            config.TOKEN_FEATURES
+            config.GLOBAL_FEATURES
         )
 
         frame = pd.DataFrame(
