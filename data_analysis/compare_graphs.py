@@ -2,31 +2,28 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from scipy.stats import mannwhitneyu
 
-
 ROOT = Path(__file__).resolve().parent
-INPUT_FILE = ROOT / "output" / "graph_metrics_per_token.csv"
 OUTPUT_DIR = ROOT / "output"
-PLOTS_DIR = OUTPUT_DIR / "plots"
-
-Q_ORDER = ["q1", "q2", "q3"]
+PLOT_DIR = OUTPUT_DIR / "plots"
+INPUT_FILE = OUTPUT_DIR / "graph_metrics_per_token.csv"
 
 METRICS = [
     "n_nodes",
     "n_edges",
     "density",
+    "largest_wcc_ratio",
+    "reciprocity",
+    "top1_degree_share",
+    "top5_degree_share",
     "max_in_degree_centrality",
     "max_out_degree_centrality",
     "max_betweenness_centrality",
     "max_pagerank",
-    "reciprocity",
-    "largest_wcc_ratio",
-    "top1_degree_share",
-    "top5_degree_share",
 ]
 
 PLOT_METRICS = [
@@ -38,200 +35,121 @@ PLOT_METRICS = [
     "reciprocity",
 ]
 
+Q_VALUES = ("q1", "q2", "q3")
 
-def _bh_adjust(p_values: pd.Series) -> pd.Series:
-    """Benjamini-Hochberg FDR correction."""
-    p = p_values.astype(float).to_numpy()
+
+def rank_biserial_from_u(u: float, n_rug: int, n_nonrug: int) -> float:
+    if n_rug == 0 or n_nonrug == 0:
+        return np.nan
+    return float((2.0 * u) / (n_rug * n_nonrug) - 1.0)
+
+
+def benjamini_hochberg(p_values: np.ndarray) -> np.ndarray:
+    p = np.asarray(p_values, dtype=float)
     n = len(p)
-
     order = np.argsort(p)
     ranked = p[order]
-
-    adjusted = ranked * n / np.arange(1, n + 1)
-    adjusted = np.minimum.accumulate(adjusted[::-1])[::-1]
-    adjusted = np.clip(adjusted, 0.0, 1.0)
-
-    result = np.empty(n, dtype=float)
-    result[order] = adjusted
-    return pd.Series(result, index=p_values.index)
-
-
-def _iqr_string(values: pd.Series) -> str:
-    q25 = values.quantile(0.25)
-    q75 = values.quantile(0.75)
-    return f"[{q25:.6g}, {q75:.6g}]"
-
-
-def _rank_biserial_from_u(
-    u_stat: float,
-    n_rug: int,
-    n_nonrug: int,
-) -> float:
-    """
-    Rank-biserial correlation using U for the Rug sample.
-
-    Positive -> Rug values tend to be larger.
-    Negative -> Non-rug values tend to be larger.
-    """
-    return (2.0 * u_stat / (n_rug * n_nonrug)) - 1.0
+    adjusted_ranked = ranked * n / np.arange(1, n + 1)
+    adjusted_ranked = np.minimum.accumulate(adjusted_ranked[::-1])[::-1]
+    adjusted_ranked = np.clip(adjusted_ranked, 0.0, 1.0)
+    adjusted = np.empty(n, dtype=float)
+    adjusted[order] = adjusted_ranked
+    return adjusted
 
 
 def compare_groups(df: pd.DataFrame) -> pd.DataFrame:
     rows = []
-
-    for q in Q_ORDER:
-        q_df = df[df["q"] == q].copy()
-
+    for q in Q_VALUES:
+        qdf = df[df["q"] == q].copy()
         for metric in METRICS:
             rug = pd.to_numeric(
-                q_df.loc[q_df["rug_pull_label"] == 1, metric],
-                errors="coerce",
-            ).dropna()
-
+                qdf.loc[qdf["rug_pull_label"] == 1, metric], errors="coerce"
+            ).replace([np.inf, -np.inf], np.nan).dropna().to_numpy()
             nonrug = pd.to_numeric(
-                q_df.loc[q_df["rug_pull_label"] == 0, metric],
-                errors="coerce",
-            ).dropna()
+                qdf.loc[qdf["rug_pull_label"] == 0, metric], errors="coerce"
+            ).replace([np.inf, -np.inf], np.nan).dropna().to_numpy()
 
-            if len(rug) == 0 or len(nonrug) == 0:
-                raise ValueError(
-                    f"Missing Rug or Non-rug observations for {q}, {metric}"
-                )
+            if len(rug) and len(nonrug):
+                test = mannwhitneyu(rug, nonrug, alternative="two-sided", method="auto")
+                u = float(test.statistic)
+                p = float(test.pvalue)
+                rbc = rank_biserial_from_u(u, len(rug), len(nonrug))
+            else:
+                u = p = rbc = np.nan
 
-            test = mannwhitneyu(
-                rug,
-                nonrug,
-                alternative="two-sided",
-                method="auto",
-            )
+            rows.append({
+                "q": q,
+                "metric": metric,
+                "n_rug": len(rug),
+                "n_nonrug": len(nonrug),
+                "rug_mean": float(np.mean(rug)) if len(rug) else np.nan,
+                "rug_median": float(np.median(rug)) if len(rug) else np.nan,
+                "nonrug_mean": float(np.mean(nonrug)) if len(nonrug) else np.nan,
+                "nonrug_median": float(np.median(nonrug)) if len(nonrug) else np.nan,
+                "mannwhitney_u": u,
+                "p_value": p,
+                "rank_biserial": rbc,
+            })
 
-            effect = _rank_biserial_from_u(
-                u_stat=float(test.statistic),
-                n_rug=len(rug),
-                n_nonrug=len(nonrug),
-            )
-
-            rows.append(
-                {
-                    "q": q,
-                    "metric": metric,
-                    "n_nonrug": len(nonrug),
-                    "nonrug_median": nonrug.median(),
-                    "nonrug_q25": nonrug.quantile(0.25),
-                    "nonrug_q75": nonrug.quantile(0.75),
-                    "nonrug_iqr": _iqr_string(nonrug),
-                    "n_rug": len(rug),
-                    "rug_median": rug.median(),
-                    "rug_q25": rug.quantile(0.25),
-                    "rug_q75": rug.quantile(0.75),
-                    "rug_iqr": _iqr_string(rug),
-                    "mann_whitney_u": float(test.statistic),
-                    "p_value": float(test.pvalue),
-                    "rank_biserial": effect,
-                    "effect_direction": (
-                        "Rug higher"
-                        if effect > 0
-                        else "Non-rug higher"
-                        if effect < 0
-                        else "No direction"
-                    ),
-                }
-            )
-
-    result = pd.DataFrame(rows)
-    result["p_fdr_bh"] = _bh_adjust(result["p_value"])
-    return result
+    out = pd.DataFrame(rows)
+    valid = out["p_value"].notna()
+    out["p_fdr_bh"] = np.nan
+    out.loc[valid, "p_fdr_bh"] = benjamini_hochberg(out.loc[valid, "p_value"].to_numpy())
+    out["significant_fdr_0_05"] = out["p_fdr_bh"] < 0.05
+    return out
 
 
-def plot_metric(df: pd.DataFrame, metric: str) -> None:
-    """
-    One figure per metric.
-    For each q: Non-rug and Rug side-by-side boxplots.
-    """
-    data = []
-    positions = []
-    labels = []
-
-    pos = 1
-    gap = 1
-
-    for q in Q_ORDER:
-        q_df = df[df["q"] == q]
-
-        nonrug = pd.to_numeric(
-            q_df.loc[q_df["rug_pull_label"] == 0, metric],
-            errors="coerce",
-        ).dropna()
-
-        rug = pd.to_numeric(
-            q_df.loc[q_df["rug_pull_label"] == 1, metric],
-            errors="coerce",
-        ).dropna()
-
-        data.extend([nonrug.to_numpy(), rug.to_numpy()])
-        positions.extend([pos, pos + 1])
-        labels.extend([f"{q}\nNon-rug", f"{q}\nRug"])
-        pos += 2 + gap
+def make_boxplot(df: pd.DataFrame, metric: str) -> None:
+    labels, data = [], []
+    for q in Q_VALUES:
+        qdf = df[df["q"] == q]
+        for label_value, label_name in ((0, "Non-rug"), (1, "Rug")):
+            vals = pd.to_numeric(
+                qdf.loc[qdf["rug_pull_label"] == label_value, metric], errors="coerce"
+            ).replace([np.inf, -np.inf], np.nan).dropna().to_numpy()
+            labels.append(f"{q}\n{label_name}")
+            data.append(vals)
 
     fig, ax = plt.subplots(figsize=(10, 6))
-
-    ax.boxplot(
-        data,
-        positions=positions,
-        widths=0.7,
-        showfliers=False,
-        medianprops={"linewidth": 2},
-    )
-
-    ax.set_xticks(positions)
-    ax.set_xticklabels(labels)
+    ax.boxplot(data, tick_labels=labels, showfliers=False)
+    ax.set_title(f"{metric} - training split only")
     ax.set_ylabel(metric)
-    ax.set_title(f"{metric}: Rug vs Non-rug across q1-q3")
-    ax.grid(axis="y", alpha=0.25)
-
+    ax.set_xlabel("Observation window / class")
     fig.tight_layout()
-    fig.savefig(PLOTS_DIR / f"{metric}.png", dpi=200, bbox_inches="tight")
+    fig.savefig(PLOT_DIR / f"{metric}.png", dpi=200)
     plt.close(fig)
 
 
 def main() -> None:
     if not INPUT_FILE.exists():
-        raise FileNotFoundError(f"Missing input file: {INPUT_FILE}")
+        raise FileNotFoundError(f"Missing {INPUT_FILE}. Run analyze_graphs.py first.")
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    PLOTS_DIR.mkdir(parents=True, exist_ok=True)
-
+    PLOT_DIR.mkdir(parents=True, exist_ok=True)
     df = pd.read_csv(INPUT_FILE)
 
     required = {"q", "rug_pull_label", *METRICS}
     missing = sorted(required - set(df.columns))
     if missing:
-        raise KeyError(f"Missing required columns: {missing}")
+        raise KeyError(f"Missing columns: {missing}")
 
-    df["rug_pull_label"] = pd.to_numeric(
-        df["rug_pull_label"], errors="raise"
-    ).astype(int)
+    print("=" * 60)
+    print("RUG VS NON-RUG COMPARISON - TRAIN ONLY")
+    print("=" * 60)
+    print(df.groupby(["q", "rug_pull_label"]).size())
 
-    labels = set(df["rug_pull_label"].unique())
-    if not labels.issubset({0, 1}):
-        raise ValueError(
-            f"Expected binary rug_pull_label in {{0,1}}, found: {sorted(labels)}"
-        )
-
-    comparisons = compare_groups(df)
-
-    stats_path = OUTPUT_DIR / "statistical_comparison.csv"
-    comparisons.to_csv(stats_path, index=False)
+    comparison = compare_groups(df)
+    comparison.to_csv(OUTPUT_DIR / "statistical_comparison.csv", index=False)
 
     for metric in PLOT_METRICS:
-        plot_metric(df, metric)
+        make_boxplot(df, metric)
 
-    print("\nDone.")
-    print(f"Statistical comparison: {stats_path}")
-    print(f"Plots directory:        {PLOTS_DIR}")
-    print("\nEffect-size sign:")
-    print("  rank_biserial > 0  => Rug values tend to be larger")
-    print("  rank_biserial < 0  => Non-rug values tend to be larger")
+    print(f"\nSaved: {OUTPUT_DIR / 'statistical_comparison.csv'}")
+    print(f"Saved plots to: {PLOT_DIR}")
+    print()
+    print(comparison[[
+        "q", "metric", "n_rug", "n_nonrug", "rug_median", "nonrug_median",
+        "rank_biserial", "p_value", "p_fdr_bh", "significant_fdr_0_05"
+    ]].to_string(index=False))
 
 
 if __name__ == "__main__":
