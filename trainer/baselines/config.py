@@ -35,8 +35,10 @@ PLOT_DIR = os.path.join(RESULT_DIR, 'plots')
 
 EXPERIMENTS = ['q1', 'q2', 'q3']
 
-# The final export covers the full dataset only; the panel scope is not part of it.
-SCOPES = ['full']
+# `full` keeps every graph-eligible sample available in each observation
+# window. `panel` will restrict all q1/q2/q3 runs to the same token set
+# for controlled cross-window comparisons.
+SCOPES = ['full', 'panel']
 
 VIEWS = [
     'node',

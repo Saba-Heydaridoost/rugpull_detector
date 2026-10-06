@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from functools import lru_cache
 
 import numpy as np
 import pandas as pd
@@ -134,6 +135,114 @@ def cohort_folder(
         cohort,
         q,
     )
+
+
+@lru_cache(maxsize=None)
+def _panel_tokens(cohort):
+    """Return graph-eligible token mints shared by q1/q2/q3 for one cohort."""
+
+    if cohort not in config.COHORTS:
+        raise ValueError(
+            f'unknown cohort {cohort!r}; '
+            f'expected one of {config.COHORTS}'
+        )
+
+    frames = {}
+    token_sets = []
+
+    for q in config.EXPERIMENTS:
+        folder = os.path.join(
+            config.COHORT_DIR,
+            cohort,
+            q,
+        )
+
+        meta_path = os.path.join(
+            folder,
+            config.GRAPH_META_FILE,
+        )
+
+        _check_artifact(meta_path)
+
+        frame = _normalise_split(
+            pd.read_parquet(
+                meta_path,
+                columns=[
+                    config.TOKEN_COL,
+                    config.LABEL_COL,
+                    config.SPLIT_COL,
+                ],
+            )
+        )
+
+        frame = (
+            frame[
+                frame[config.SPLIT_COL]
+                .isin(config.VALID_SPLITS)
+            ]
+            .copy()
+            .reset_index(drop=True)
+        )
+
+        if frame[config.TOKEN_COL].duplicated().any():
+            raise AssertionError(
+                f'{q}/{cohort}: graph metadata contains '
+                'duplicate token_mint rows'
+            )
+
+        frames[q] = frame
+
+        token_sets.append(
+            set(frame[config.TOKEN_COL])
+        )
+
+    common_tokens = frozenset(
+        set.intersection(*token_sets)
+    )
+
+    if not common_tokens:
+        raise ValueError(
+            f'{cohort}: no graph-eligible tokens are shared '
+            'across q1/q2/q3'
+        )
+
+    audit = pd.concat(
+        [
+            frames[q][
+                frames[q][config.TOKEN_COL]
+                .isin(common_tokens)
+            ]
+            .assign(experiment_id=q)
+            for q in config.EXPERIMENTS
+        ],
+        ignore_index=True,
+    )
+
+    if (
+        audit
+        .groupby(config.TOKEN_COL)[config.LABEL_COL]
+        .nunique()
+        .gt(1)
+        .any()
+    ):
+        raise AssertionError(
+            f'{cohort}: panel contains inconsistent labels '
+            'across q1/q2/q3'
+        )
+
+    if (
+        audit
+        .groupby(config.TOKEN_COL)[config.SPLIT_COL]
+        .nunique()
+        .gt(1)
+        .any()
+    ):
+        raise AssertionError(
+            f'{cohort}: panel contains inconsistent split assignments '
+            'across q1/q2/q3'
+        )
+
+    return common_tokens
 
 
 def _check_columns(frame, required, source):
@@ -659,6 +768,62 @@ def load_graphs(
         .copy()
         .reset_index(drop=True)
     )
+
+    # -----------------------------------------------------------------
+    # Controlled common-token panel.
+    #
+    # The full path above is unchanged. For panel runs only, retain
+    # exactly the graph-eligible token mints that are available in all
+    # three observation windows for the selected missingness cohort.
+    # -----------------------------------------------------------------
+
+    if scope == 'panel':
+        panel_tokens = _panel_tokens(cohort)
+
+        meta = (
+            meta[
+                meta[config.TOKEN_COL]
+                .isin(panel_tokens)
+            ]
+            .copy()
+            .reset_index(drop=True)
+        )
+
+        edges = (
+            edges[
+                edges[config.TOKEN_COL]
+                .isin(panel_tokens)
+            ]
+            .copy()
+            .reset_index(drop=True)
+        )
+
+        token_frame = (
+            token_frame[
+                token_frame[config.TOKEN_COL]
+                .isin(panel_tokens)
+            ]
+            .copy()
+            .reset_index(drop=True)
+        )
+
+        if set(meta[config.TOKEN_COL]) != set(panel_tokens):
+            raise AssertionError(
+                f'{q}/{cohort}: graph metadata does not exactly '
+                'match the common panel token set'
+            )
+
+        if set(edges[config.TOKEN_COL]) != set(panel_tokens):
+            raise AssertionError(
+                f'{q}/{cohort}: recovered edges do not exactly '
+                'match the common panel token set'
+            )
+
+        if set(token_frame[config.TOKEN_COL]) != set(panel_tokens):
+            raise AssertionError(
+                f'{q}/{cohort}: token-level features do not exactly '
+                'match the common panel token set'
+            )
 
     # -----------------------------------------------------------------
     # Integrity checks

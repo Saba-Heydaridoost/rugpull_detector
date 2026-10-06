@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from functools import lru_cache
 
 import numpy as np
 import pandas as pd
@@ -53,6 +54,111 @@ def cohort_folder(scope='full', q='q1', cohort='original'):
     return os.path.join(config.COHORT_DIR, cohort, q)
 
 
+@lru_cache(maxsize=None)
+def _panel_tokens(cohort):
+    """Return graph-eligible token mints shared by q1/q2/q3 for one cohort."""
+
+    if cohort not in config.COHORT_NODE_FILES:
+        raise ValueError(
+            f'unknown cohort {cohort!r}, expected one of {config.COHORTS}'
+        )
+
+    frames = {}
+    token_sets = []
+
+    for q in config.EXPERIMENTS:
+        folder = os.path.join(
+            config.COHORT_DIR,
+            cohort,
+            q,
+        )
+
+        graph_path = os.path.join(
+            folder,
+            config.GRAPH_FILE,
+        )
+
+        _check_artifact(graph_path)
+
+        frame = _normalise_split(
+            pd.read_parquet(
+                graph_path,
+                columns=[
+                    'token_mint',
+                    config.LABEL_COL,
+                    config.SPLIT_COL,
+                ],
+            )
+        )
+
+        frame = (
+            frame[
+                frame[config.SPLIT_COL].isin(
+                    {'train', 'val', 'test'}
+                )
+            ]
+            .copy()
+            .reset_index(drop=True)
+        )
+
+        if frame['token_mint'].duplicated().any():
+            raise AssertionError(
+                f'{q}/{cohort}: graph table contains duplicate token_mint rows'
+            )
+
+        frames[q] = frame
+        token_sets.append(
+            set(frame['token_mint'])
+        )
+
+    common_tokens = frozenset(
+        set.intersection(*token_sets)
+    )
+
+    if not common_tokens:
+        raise ValueError(
+            f'{cohort}: no graph-eligible tokens are shared across q1/q2/q3'
+        )
+
+    # Check that label and chronological split assignment are identical
+    # for every token retained in the panel.
+    audit = pd.concat(
+        [
+            frames[q][
+                frames[q]['token_mint'].isin(common_tokens)
+            ]
+            .assign(experiment_id=q)
+            for q in config.EXPERIMENTS
+        ],
+        ignore_index=True,
+    )
+
+    if (
+        audit
+        .groupby('token_mint')[config.LABEL_COL]
+        .nunique()
+        .gt(1)
+        .any()
+    ):
+        raise AssertionError(
+            f'{cohort}: panel contains inconsistent labels across q1/q2/q3'
+        )
+
+    if (
+        audit
+        .groupby('token_mint')[config.SPLIT_COL]
+        .nunique()
+        .gt(1)
+        .any()
+    ):
+        raise AssertionError(
+            f'{cohort}: panel contains inconsistent split assignments '
+            'across q1/q2/q3'
+        )
+
+    return common_tokens
+
+
 def load_view(scope='full', q='q1', view='node', features=None, cohort='original'):
     """Load one modelling frame.
 
@@ -69,6 +175,29 @@ def load_view(scope='full', q='q1', view='node', features=None, cohort='original
     _check_artifact(nodes_path)
     nodes = _normalise_split(pd.read_parquet(nodes_path))
 
+    if scope == 'panel':
+        panel_tokens = _panel_tokens(cohort)
+
+        nodes = (
+            nodes[
+                nodes['token_mint'].isin(panel_tokens)
+            ]
+            .copy()
+            .reset_index(drop=True)
+        )
+
+        missing_from_nodes = (
+            set(panel_tokens)
+            - set(nodes['token_mint'])
+        )
+
+        if missing_from_nodes:
+            raise AssertionError(
+                f'{q}/{cohort}: '
+                f'{len(missing_from_nodes)} panel token(s) are missing '
+                'from the token-level table'
+            )
+
     if view == 'node':
         _check_features(nodes, features, nodes_path)
         return nodes[config.META_COLS + features].reset_index(drop=True), features
@@ -76,6 +205,21 @@ def load_view(scope='full', q='q1', view='node', features=None, cohort='original
     graph_path = os.path.join(folder, config.GRAPH_FILE)
     _check_artifact(graph_path)
     graph = pd.read_parquet(graph_path)
+
+    if scope == 'panel':
+        graph = (
+            graph[
+                graph['token_mint'].isin(panel_tokens)
+            ]
+            .copy()
+            .reset_index(drop=True)
+        )
+
+        if set(graph['token_mint']) != set(panel_tokens):
+            raise AssertionError(
+                f'{q}/{cohort}: graph table does not exactly match '
+                'the common panel token set'
+            )
 
     if graph['token_mint'].duplicated().any():
         raise AssertionError(

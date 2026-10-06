@@ -58,6 +58,7 @@ EXPERIMENTS = [
 
 SCOPES = [
     'full',
+    'panel',
 ]
 
 COHORTS = [
