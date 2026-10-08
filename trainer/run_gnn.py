@@ -60,6 +60,12 @@ TOKEN_VARIANTS = list(
     config.TOKEN_VARIANTS
 )
 
+# Primary results already exist; run only the
+# freeze-authority ablation by default.
+FEATURE_VARIANTS = [
+    'plus_freeze_authority',
+]
+
 COMPLETE_CASE_VARIANTS = list(
     config.COMPLETE_CASE_VARIANTS
 )
@@ -93,6 +99,7 @@ def run(
     scope=None,
     experiments=None,
     cohorts=None,
+    feature_variants=None,
     variants=None,
     space_overrides=None,
     n_trials=None,
@@ -123,6 +130,11 @@ def run(
     variants = (
         variants
         or TOKEN_VARIANTS
+    )
+
+    feature_variants = (
+        feature_variants
+        or FEATURE_VARIANTS
     )
 
     space_overrides = (
@@ -184,55 +196,59 @@ def run(
 
         for q in experiments:
 
-            for variant in variants_for(
-                cohort,
-                variants,
-            ):
+            for feature_variant in feature_variants:
 
-                data = get_data(
-                    scope,
-                    q,
+                for variant in variants_for(
                     cohort,
-                    variant=variant,
-                )
+                    variants,
+                ):
 
-                if not data.usable:
-
-                    print(
-                        '\nskipping '
-                        f'[{cohort}] '
-                        f'{data.describe()} '
-                        '- insufficient '
-                        'training data'
+                    data = get_data(
+                        scope,
+                        q,
+                        cohort,
+                        variant=variant,
+                        feature_variant=feature_variant,
                     )
 
-                    continue
+                    if not data.usable:
 
-                for name in models:
-
-                    result = (
-                        get(name)
-                        .train(
-                            data,
-
-                            space=(
-                                space_overrides
-                                .get(name)
-                            ),
-
-                            n_trials=n_trials,
-                            n_seeds=n_seeds,
+                        print(
+                            '\nskipping '
+                            f'[{cohort}] '
+                            f'{data.describe()} '
+                            '- insufficient '
+                            'training data'
                         )
-                    )
 
-                    results[
-                        (
-                            cohort,
-                            q,
-                            variant,
-                            name,
+                        continue
+
+                    for name in models:
+
+                        result = (
+                            get(name)
+                            .train(
+                                data,
+
+                                space=(
+                                    space_overrides
+                                    .get(name)
+                                ),
+
+                                n_trials=n_trials,
+                                n_seeds=n_seeds,
+                            )
                         )
-                    ] = result
+
+                        results[
+                            (
+                                cohort,
+                                q,
+                                feature_variant,
+                                variant,
+                                name,
+                            )
+                        ] = result
 
     return results
 
@@ -302,6 +318,13 @@ def main():
         help='list GNN architectures and exit',
     )
 
+    parser.add_argument(
+        '--feature-variants',
+        nargs='+',
+        default=None,
+        choices=config.FEATURE_VARIANTS,
+    )
+
     args = parser.parse_args()
 
     if args.list:
@@ -333,6 +356,7 @@ def main():
         scope=args.scope,
         experiments=args.experiments,
         cohorts=args.cohorts,
+        feature_variants=args.feature_variants,
         n_trials=args.trials,
         variants=args.variants,
         n_seeds=args.seeds,

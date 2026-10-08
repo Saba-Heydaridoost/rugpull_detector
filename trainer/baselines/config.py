@@ -45,6 +45,7 @@ VIEWS = [
     'node_matched',
     'graph',
     'node_graph',
+    'node_graph_freeze',
 ]
 
 # Missingness cohorts, exported by EDA.ipynb as one folder per cohort under
@@ -86,6 +87,15 @@ NODE_FEATURES = [
     'liquidity_at_observation_end',
 ]
 
+FREEZE_AUTHORITY_FEATURE = (
+    'has_initial_freeze_authority'
+)
+
+NODE_FEATURES_WITH_FREEZE = (
+    NODE_FEATURES
+    + [FREEZE_AUTHORITY_FEATURE]
+)
+
 # Recovered-transfer-graph summary features
 # (COHORT_DIR/{cohort}/{q}/model_graph_features_with_split.parquet).
 #
@@ -120,6 +130,9 @@ FEATURE_SETS = {
 
     'node_graph':
         NODE_FEATURES + GRAPH_FEATURES,
+
+    'node_graph_freeze':
+        NODE_FEATURES_WITH_FREEZE + GRAPH_FEATURES,
 }
 
 

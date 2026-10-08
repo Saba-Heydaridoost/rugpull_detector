@@ -602,10 +602,25 @@ def load_graphs(
     scope='full',
     q='q1',
     cohort='original',
+    feature_variant='base',
 ):
     """Load one GNN dataset before train-only numerical preprocessing."""
 
     require_pyg()
+
+    if feature_variant not in config.FEATURE_VARIANTS:
+        raise ValueError(
+            f'unknown feature variant {feature_variant!r}; '
+            f'expected one of {config.FEATURE_VARIANTS}'
+        )
+
+    token_features = list(
+        config.TOKEN_FEATURE_SETS[feature_variant]
+    )
+
+    global_features = list(
+        config.GLOBAL_FEATURE_SETS[feature_variant]
+    )
 
     folder = cohort_folder(
         scope=scope,
@@ -658,7 +673,7 @@ def load_graphs(
         config.LABEL_COL,
         config.SPLIT_COL,
     ] + list(
-        config.TOKEN_FEATURES
+        token_features
     )
 
     meta = _normalise_split(
@@ -710,7 +725,7 @@ def load_graphs(
         config.LABEL_COL,
         config.SPLIT_COL,
     ] + list(
-        config.TOKEN_FEATURES
+        token_features
     )
 
     _check_columns(
@@ -908,7 +923,7 @@ def load_graphs(
 
     token_values = (
         aligned_token_frame[
-            config.TOKEN_FEATURES
+            token_features
         ]
         .to_numpy(dtype=float)
     )
@@ -926,7 +941,7 @@ def load_graphs(
             'complete_case contains missing token-level predictors'
         )
 
-    for feature in config.TOKEN_FEATURES:
+    for feature in token_features:
         meta[feature] = (
             aligned_token_frame[
                 feature
@@ -964,14 +979,14 @@ def load_graphs(
 
     global_values = (
         meta[
-            config.GLOBAL_FEATURES
+            global_features
         ]
         .to_numpy(dtype=float)
     )
 
     if (
         global_values.shape[1]
-        != len(config.GLOBAL_FEATURES)
+        != len(global_features)
     ):
         raise AssertionError(
             'unexpected global feature dimension'
@@ -1113,7 +1128,7 @@ def load_graphs(
             label=int(row[config.LABEL_COL]),
             token_features=(
                 row[
-                    config.GLOBAL_FEATURES
+                    global_features
                 ]
                 .astype(float)
                 .to_numpy()
@@ -1306,12 +1321,19 @@ class TokenFeaturePreprocessor:
         self,
         add_mask=True,
         transform=None,
+        columns=None,
     ):
         self.add_mask = add_mask
 
         self.transform_name = (
             transform
             or config.TRANSFORM
+        )
+
+        self.requested_columns_ = (
+            list(config.GLOBAL_FEATURES)
+            if columns is None
+            else list(columns)
         )
 
     def fit(
@@ -1335,14 +1357,14 @@ class TokenFeaturePreprocessor:
         ).astype(np.float64)
 
         if X.shape[1] != len(
-            config.GLOBAL_FEATURES
+            self.requested_columns_
         ):
             raise AssertionError(
                 'unexpected raw token-feature dimension'
             )
 
         self.columns_ = list(
-            config.GLOBAL_FEATURES
+            self.requested_columns_
         )
 
         frame = pd.DataFrame(
@@ -1531,6 +1553,7 @@ class GraphRunData:
     scope: str
     experiment: str
     cohort: str
+    feature_variant: str
     mask_variant: str
 
     node_preprocessor: NodeFeaturePreprocessor
@@ -1573,8 +1596,17 @@ class GraphRunData:
 
     @property
     def variant(self):
+        prefix = config.GRAPH_VARIANT
+
+        # Keep historical primary result names unchanged.
+        if self.feature_variant != 'base':
+            prefix = (
+                f'{prefix}_'
+                f'{self.feature_variant}'
+            )
+
         return (
-            f'{config.GRAPH_VARIANT}_'
+            f'{prefix}_'
             f'{self.mask_variant}'
         )
 
@@ -1668,8 +1700,15 @@ def get_data(
     q='q1',
     cohort='original',
     variant='with_mask',
+    feature_variant='base',
 ):
     """Load graphs and fit all numerical preprocessing on training only."""
+
+    if feature_variant not in config.FEATURE_VARIANTS:
+        raise ValueError(
+            f'unknown feature variant {feature_variant!r}; '
+            f'expected one of {config.FEATURE_VARIANTS}'
+        )
 
     if variant not in config.TOKEN_VARIANTS:
         raise ValueError(
@@ -1691,6 +1730,7 @@ def get_data(
         scope=scope,
         q=q,
         cohort=cohort,
+        feature_variant=feature_variant,
     )
 
     train_raw = corpus.graphs_for_split(
@@ -1779,7 +1819,12 @@ def get_data(
             add_mask=(
                 variant
                 == 'with_mask'
-            )
+            ),
+            columns=(
+                config.GLOBAL_FEATURE_SETS[
+                    feature_variant
+                ]
+            ),
         )
         .fit(
             train_raw
@@ -1830,6 +1875,7 @@ def get_data(
         scope=scope,
         experiment=q,
         cohort=cohort,
+        feature_variant=feature_variant,
         mask_variant=variant,
 
         node_preprocessor=node_preprocessor,

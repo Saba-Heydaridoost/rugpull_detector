@@ -169,6 +169,26 @@ TOKEN_FEATURES = [
     'liquidity_at_observation_end',
 ]
 
+FREEZE_AUTHORITY_FEATURE = (
+    'has_initial_freeze_authority'
+)
+
+FEATURE_VARIANTS = [
+    'base',
+    'plus_freeze_authority',
+]
+
+TOKEN_FEATURE_SETS = {
+    'base':
+        list(TOKEN_FEATURES),
+
+    'plus_freeze_authority':
+        (
+            TOKEN_FEATURES
+            + [FREEZE_AUTHORITY_FEATURE]
+        ),
+}
+
 # Graph-level summary predictors shared exactly with the tabular
 # `node_graph` baseline.
 GRAPH_SUMMARY_FEATURES = [
@@ -189,9 +209,18 @@ GRAPH_SUMMARY_FEATURES = [
 # This exactly matches the predictors of the tabular `node_graph`
 # baseline. The GNN additionally learns from graph topology and
 # endpoint-level node representations.
-GLOBAL_FEATURES = (
-    TOKEN_FEATURES
-    + GRAPH_SUMMARY_FEATURES
+GLOBAL_FEATURE_SETS = {
+    name: (
+        list(token_features)
+        + list(GRAPH_SUMMARY_FEATURES)
+    )
+    for name, token_features
+    in TOKEN_FEATURE_SETS.items()
+}
+
+# Keep the original primary definition available.
+GLOBAL_FEATURES = list(
+    GLOBAL_FEATURE_SETS['base']
 )
 
 # Stored edge attributes available to the graph object.
