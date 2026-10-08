@@ -15,6 +15,9 @@ The held-out test partition remains frozen unless explicitly enabled in
 config.
 """
 
+import ast
+import os
+
 import pandas as pd
 
 try:
@@ -383,6 +386,128 @@ def search(
     )
 
 
+def load_frozen_params(
+    name,
+    data,
+):
+    """Load the exact validation-selected parameters from a previous run."""
+
+    tag = (
+        f'{name}_'
+        f'{data.scope}_'
+        f'{data.experiment}_'
+        f'{data.view}_'
+        f'{data.variant}_'
+        f'{data.cohort}'
+    )
+
+    path = os.path.join(
+        config.RESULT_DIR,
+        f'runs_{tag}.csv',
+    )
+
+    if not os.path.exists(
+        path
+    ):
+        raise FileNotFoundError(
+            'cannot reuse frozen hyperparameters because '
+            'the previous run file does not exist: '
+            f'{path}'
+        )
+
+    runs = pd.read_csv(
+        path
+    )
+
+    expected_n_train = len(data.ytr)
+
+    if 'n_train' in runs.columns:
+        saved_n_train = (
+            runs['n_train']
+            .dropna()
+            .unique()
+        )
+
+        if (
+            len(saved_n_train) != 1
+            or int(saved_n_train[0])
+            != expected_n_train
+        ):
+            raise ValueError(
+                'frozen run does not match the current '
+                'training population: '
+                f'saved n_train={saved_n_train}, '
+                f'current n_train={expected_n_train}'
+            )
+
+    checks = {
+        'n_node_features':
+            data.n_node_features,
+
+        'n_token_features':
+            data.n_token_features,
+
+        'n_edge_features_available':
+            data.n_edge_features,
+    }
+
+    for column, expected in checks.items():
+
+        if column not in runs.columns:
+            continue
+
+        saved = (
+            runs[column]
+            .dropna()
+            .unique()
+        )
+
+        if (
+            len(saved) != 1
+            or int(saved[0]) != int(expected)
+        ):
+            raise ValueError(
+                'frozen run does not match the current '
+                f'{column}: '
+                f'saved={saved}, current={expected}'
+            )
+
+    if 'params' not in runs.columns:
+        raise ValueError(
+            'previous run file has no params column: '
+            f'{path}'
+        )
+
+    params_values = (
+        runs['params']
+        .dropna()
+        .astype(str)
+        .unique()
+    )
+
+    if len(params_values) != 1:
+        raise ValueError(
+            'expected exactly one frozen '
+            'hyperparameter configuration in '
+            f'{path}, found {len(params_values)}'
+        )
+
+    params = ast.literal_eval(
+        params_values[0]
+    )
+
+    if not isinstance(
+        params,
+        dict,
+    ):
+        raise TypeError(
+            'frozen params are not a dict: '
+            f'{path}'
+        )
+
+    return params
+
+
 def evaluate(
     name,
     make_predictor,
@@ -393,6 +518,7 @@ def evaluate(
     verbose=True,
     save=True,
     plot=None,
+    reuse_best_params=False,
 ):
     """Tune on validation ROC-AUC, then repeat the winner over seeds."""
 
@@ -423,63 +549,90 @@ def evaluate(
             '=' * 100
         )
 
-    sweep, best_params = search(
-        name,
-        make_predictor,
-        space,
-        data,
-        n_trials=n_trials,
-        verbose=verbose,
-    )
+    if reuse_best_params:
 
-    if verbose:
-
-        print(
-            '\ntop configurations:'
+        best_params = load_frozen_params(
+            name,
+            data,
         )
 
-        print(
-            sweep
-            .head(5)
-            .to_string(
-                index=False
-            )
-        )
+        sweep = None
 
-        explore = sweep.loc[
-            sweep['trial']
-            < config.N_STARTUP_TRIALS,
-            'val_roc_auc',
-        ]
+        if verbose:
 
-        if len(explore) >= 3:
-
-            spread = (
-                explore.max()
-                - explore.median()
+            print(
+                'reusing frozen validation-selected '
+                'hyperparameters; Optuna search skipped'
             )
 
             print(
-                '\nexploration spread over '
-                f'{len(explore)} random trials '
-                '(best - median): '
-                f'{spread:.4f}'
+                f'selected: {best_params}'
             )
 
-        print(
-            f'\n{len(sweep)} trial(s) completed, '
-            f'best '
-            f'{sweep["val_roc_auc"].max():.4f}'
+            print(
+                f're-running over '
+                f'{n_seeds} seed(s) ...'
+            )
+
+    else:
+
+        sweep, best_params = search(
+            name,
+            make_predictor,
+            space,
+            data,
+            n_trials=n_trials,
+            verbose=verbose,
         )
 
-        print(
-            f'selected: {best_params}'
-        )
+        if verbose:
 
-        print(
-            f're-running over '
-            f'{n_seeds} seed(s) ...'
-        )
+            print(
+                '\ntop configurations:'
+            )
+
+            print(
+                sweep
+                .head(5)
+                .to_string(
+                    index=False
+                )
+            )
+
+            explore = sweep.loc[
+                sweep['trial']
+                < config.N_STARTUP_TRIALS,
+                'val_roc_auc',
+            ]
+
+            if len(explore) >= 3:
+
+                spread = (
+                    explore.max()
+                    - explore.median()
+                )
+
+                print(
+                    '\nexploration spread over '
+                    f'{len(explore)} random trials '
+                    '(best - median): '
+                    f'{spread:.4f}'
+                )
+
+            print(
+                f'\n{len(sweep)} trial(s) completed, '
+                f'best '
+                f'{sweep["val_roc_auc"].max():.4f}'
+            )
+
+            print(
+                f'selected: {best_params}'
+            )
+
+            print(
+                f're-running over '
+                f'{n_seeds} seed(s) ...'
+            )
 
     rows = []
 
@@ -665,19 +818,27 @@ def evaluate(
             f'{data.cohort}'
         )
 
-        save_table(
-            sweep,
-            f'sweep_{tag}',
+        if sweep is not None:
+
+            save_table(
+                sweep,
+                f'sweep_{tag}',
+            )
+
+        run_prefix = (
+            'final_'
+            if reuse_best_params
+            else ''
         )
 
         save_table(
             runs,
-            f'runs_{tag}',
+            f'{run_prefix}runs_{tag}',
         )
 
         save_table(
             gaps,
-            f'gap_{tag}',
+            f'{run_prefix}gap_{tag}',
         )
 
         append_summary(

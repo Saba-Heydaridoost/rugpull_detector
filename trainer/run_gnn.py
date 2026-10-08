@@ -104,6 +104,7 @@ def run(
     space_overrides=None,
     n_trials=None,
     n_seeds=None,
+    reuse_best_params=False,
 ):
     """Train selected GNNs across selected dataset cells."""
 
@@ -237,6 +238,10 @@ def run(
 
                                 n_trials=n_trials,
                                 n_seeds=n_seeds,
+
+                                reuse_best_params=(
+                                    reuse_best_params
+                                ),
                             )
                         )
 
@@ -313,6 +318,15 @@ def main():
     )
 
     parser.add_argument(
+        '--reuse-best-params',
+        action='store_true',
+        help=(
+            'skip Optuna and reuse the validation-selected '
+            'hyperparameters stored by the previous run'
+        ),
+    )
+
+    parser.add_argument(
         '--list',
         action='store_true',
         help='list GNN architectures and exit',
@@ -326,6 +340,15 @@ def main():
     )
 
     args = parser.parse_args()
+
+    if (
+        args.reuse_best_params
+        and args.trials is not None
+    ):
+        parser.error(
+            '--trials cannot be used together with '
+            '--reuse-best-params'
+        )
 
     if args.list:
 
@@ -360,6 +383,7 @@ def main():
         n_trials=args.trials,
         variants=args.variants,
         n_seeds=args.seeds,
+        reuse_best_params=args.reuse_best_params,
     )
 
     if results:

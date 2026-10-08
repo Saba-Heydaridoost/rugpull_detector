@@ -102,7 +102,7 @@ def variants_for(cohort, variants):
 
 
 def run(models=None, scope=None, experiments=None, views=None, variants=None,
-        cohorts=None, space_overrides=None, n_trials=None, n_seeds=None):
+        cohorts=None, space_overrides=None, n_trials=None, n_seeds=None, reuse_best_params=False):
     """Train the selected baselines across the selected datasets."""
     models = models or ENABLED_MODELS
     scope = scope or SCOPE
@@ -139,6 +139,7 @@ def run(models=None, scope=None, experiments=None, views=None, variants=None,
                                 space=space_overrides.get(name),
                                 n_trials=n_trials,
                                 n_seeds=n_seeds,
+                                reuse_best_params=reuse_best_params,
                             )
                             # NEW: tag the summary so cohorts stay distinguishable
                             result['summary'] = result['summary'].assign(cohort=cohort)
@@ -165,8 +166,25 @@ def main():
     parser.add_argument('--trials', type=int, default=None,
                         help='Optuna trials per study; overrides every model default')
     parser.add_argument('--seeds', type=int, default=None)
+    parser.add_argument(
+        '--reuse-best-params',
+        action='store_true',
+        help=(
+            'skip Optuna and reuse the validation-selected '
+            'hyperparameters stored by the previous run'
+        ),
+    )
     parser.add_argument('--list', action='store_true', help='list baselines and exit')
     args = parser.parse_args()
+
+    if (
+        args.reuse_best_params
+        and args.trials is not None
+    ):
+        parser.error(
+            '--trials cannot be used together with '
+            '--reuse-best-params'
+        )
 
     if args.list:
         for name in ALL_MODELS:
@@ -180,7 +198,7 @@ def main():
 
     results = run(models=models, scope=args.scope, experiments=args.experiments,
                   views=args.views, variants=args.variants, cohorts=args.cohorts,  # NEW
-                  n_trials=args.trials, n_seeds=args.seeds)
+                  n_trials=args.trials, n_seeds=args.seeds, reuse_best_params=args.reuse_best_params)
 
     if results:
         import pandas as pd

@@ -10,6 +10,9 @@ not a performance claim; it exists so the train-validation gap can be read direc
 is the clearest overfitting signal available while the held-out partition stays frozen.
 """
 
+import ast
+import os
+
 import numpy as np
 import pandas as pd
 
@@ -170,8 +173,105 @@ def search(name, make_predictor, space, data, n_trials=None, verbose=True):
     return trials, best_params
 
 
-def evaluate(name, make_predictor, space, data, n_trials=None, n_seeds=None, verbose=True,
-             save=True, plot=None):
+def load_frozen_params(name, data):
+    """Load the exact validation-selected parameters from a previous run."""
+
+    tag = (
+        f'{name}_{data.scope}_{data.experiment}_'
+        f'{data.view}_{data.variant}_{data.cohort}'
+    )
+
+    path = os.path.join(
+        config.RESULT_DIR,
+        f'runs_{tag}.csv',
+    )
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            'cannot reuse frozen hyperparameters because the '
+            f'previous run file does not exist: {path}'
+        )
+
+    runs = pd.read_csv(path)
+
+    expected_n_train = len(data.ytr)
+    expected_n_features = data.Xtr.shape[1]
+
+    if 'n_train' in runs.columns:
+        saved_n_train = runs['n_train'].dropna().unique()
+
+        if (
+            len(saved_n_train) != 1
+            or int(saved_n_train[0]) != expected_n_train
+        ):
+            raise ValueError(
+                'frozen run does not match the current '
+                'training population: '
+                f'saved n_train={saved_n_train}, '
+                f'current n_train={expected_n_train}'
+            )
+
+    if 'n_features' in runs.columns:
+        saved_n_features = (
+            runs['n_features']
+            .dropna()
+            .unique()
+        )
+
+        if (
+            len(saved_n_features) != 1
+            or int(saved_n_features[0])
+            != expected_n_features
+        ):
+            raise ValueError(
+                'frozen run does not match the current '
+                'feature dimensionality: '
+                f'saved n_features={saved_n_features}, '
+                f'current n_features={expected_n_features}'
+            )
+
+    if 'params' not in runs.columns:
+        raise ValueError(
+            f'previous run file has no params column: {path}'
+        )
+
+    params_values = (
+        runs['params']
+        .dropna()
+        .astype(str)
+        .unique()
+    )
+
+    if len(params_values) != 1:
+        raise ValueError(
+            'expected exactly one frozen hyperparameter '
+            f'configuration in {path}, found {len(params_values)}'
+        )
+
+    params = ast.literal_eval(
+        params_values[0]
+    )
+
+    if not isinstance(params, dict):
+        raise TypeError(
+            f'frozen params in {path} are not a dict'
+        )
+
+    return params
+
+
+def evaluate(
+    name,
+    make_predictor,
+    space,
+    data,
+    n_trials=None,
+    n_seeds=None,
+    verbose=True,
+    save=True,
+    plot=None,
+    reuse_best_params=False,
+):
     """Tune on validation ROC-AUC with Optuna, then re-run the winner over several seeds."""
     n_seeds = config.N_SEEDS if n_seeds is None else n_seeds
     plot = config.MAKE_PLOTS if plot is None else plot
@@ -181,29 +281,66 @@ def evaluate(name, make_predictor, space, data, n_trials=None, n_seeds=None, ver
         print(f'{name.upper()}  {data.describe()}')
         print('=' * 100)
 
-    sweep, best_params = search(name, make_predictor, space, data,
-                                n_trials=n_trials, verbose=verbose)
+    if reuse_best_params:
+        best_params = load_frozen_params(
+            name,
+            data,
+        )
 
-    if verbose:
-        print('\ntop configurations:')
-        print(sweep.head(5).to_string(index=False))
+        sweep = None
 
-        # A flat search means the winning score is mostly selection noise rather than a
-        # real configuration effect. The spread is measured over the startup trials only:
-        # those are drawn quasi-randomly, so they sample the space evenly, whereas TPE
-        # deliberately concentrates its later trials near the optimum and would shrink a
-        # best-minus-median computed over the whole study for reasons that say nothing
-        # about how sensitive the model is to its hyperparameters.
-        explore = sweep.loc[sweep['trial'] < config.N_STARTUP_TRIALS, 'val_roc_auc']
+        if verbose:
+            print(
+                'reusing frozen validation-selected '
+                'hyperparameters; Optuna search skipped'
+            )
+            print(f'selected: {best_params}')
+            print(
+                f're-running over {n_seeds} seed(s) ...'
+            )
 
-        if len(explore) >= 3:
-            spread = explore.max() - explore.median()
-            print(f'\nexploration spread over {len(explore)} random trials '
-                  f'(best - median): {spread:.4f}')
+    else:
+        sweep, best_params = search(
+            name,
+            make_predictor,
+            space,
+            data,
+            n_trials=n_trials,
+            verbose=verbose,
+        )
 
-        print(f'\n{len(sweep)} trial(s) completed, best {sweep["val_roc_auc"].max():.4f}')
-        print(f'selected: {best_params}')
-        print(f're-running over {n_seeds} seed(s) ...')
+        if verbose:
+            print('\ntop configurations:')
+            print(
+                sweep.head(5)
+                .to_string(index=False)
+            )
+
+            explore = sweep.loc[
+                sweep['trial'] < config.N_STARTUP_TRIALS,
+                'val_roc_auc',
+            ]
+
+            if len(explore) >= 3:
+                spread = (
+                    explore.max()
+                    - explore.median()
+                )
+
+                print(
+                    f'\nexploration spread over '
+                    f'{len(explore)} random trials '
+                    f'(best - median): {spread:.4f}'
+                )
+
+            print(
+                f'\n{len(sweep)} trial(s) completed, '
+                f'best {sweep["val_roc_auc"].max():.4f}'
+            )
+            print(f'selected: {best_params}')
+            print(
+                f're-running over {n_seeds} seed(s) ...'
+            )
 
     rows = []
     for seed in range(n_seeds):
@@ -251,11 +388,36 @@ def evaluate(name, make_predictor, space, data, n_trials=None, n_seeds=None, ver
         plot_path = plot_train_val(runs, name, data, best_params, save=save, verbose=verbose)
 
     if save:
-        tag = f'{name}_{data.scope}_{data.experiment}_{data.view}_{data.variant}_{data.cohort}'
-        save_table(sweep, f'sweep_{tag}')
-        save_table(runs, f'runs_{tag}')
-        save_table(gaps, f'gap_{tag}')
-        append_summary(summary)
+        tag = (
+            f'{name}_{data.scope}_{data.experiment}_'
+            f'{data.view}_{data.variant}_{data.cohort}'
+        )
+
+        if sweep is not None:
+            save_table(
+                sweep,
+                f'sweep_{tag}',
+            )
+
+        run_prefix = (
+            'final_'
+            if reuse_best_params
+            else ''
+        )
+
+        save_table(
+            runs,
+            f'{run_prefix}runs_{tag}',
+        )
+
+        save_table(
+            gaps,
+            f'{run_prefix}gap_{tag}',
+        )
+
+        append_summary(
+            summary
+        )
 
     return {
         'name': name,
