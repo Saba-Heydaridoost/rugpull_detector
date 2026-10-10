@@ -27,7 +27,25 @@ def append_summary(summary, verbose=True):
     Re-tuning a model overwrites its existing row rather than appending a duplicate.
     """
     os.makedirs(config.RESULT_DIR, exist_ok=True)
-    path = os.path.join(config.RESULT_DIR, 'summary.csv')
+    scopes = (
+        summary['scope']
+        .dropna()
+        .astype(str)
+        .unique()
+    )
+
+    if len(scopes) != 1:
+        raise ValueError(
+            'append_summary expects exactly one scope; '
+            f'found {scopes.tolist()}'
+        )
+
+    scope = scopes[0]
+
+    path = os.path.join(
+        config.RESULT_DIR,
+        f'summary_{scope}.csv',
+    )
 
     if os.path.exists(path):
         merged = pd.concat([pd.read_csv(path), summary], ignore_index=True)
@@ -47,8 +65,46 @@ def append_summary(summary, verbose=True):
     return path
 
 
-def load_summary():
-    """Read the cumulative summary, or None if nothing has been run yet."""
-    path = os.path.join(config.RESULT_DIR, 'summary.csv')
+def load_summary(scope=None):
+    """Read one scope summary, or combine all available scope summaries."""
 
-    return pd.read_csv(path) if os.path.exists(path) else None
+    if scope is not None:
+
+        if scope not in config.SCOPES:
+            raise ValueError(
+                f'unknown scope {scope!r}; '
+                f'expected one of {config.SCOPES}'
+            )
+
+        path = os.path.join(
+            config.RESULT_DIR,
+            f'summary_{scope}.csv',
+        )
+
+        return (
+            pd.read_csv(path)
+            if os.path.exists(path)
+            else None
+        )
+
+    frames = []
+
+    for current_scope in config.SCOPES:
+
+        path = os.path.join(
+            config.RESULT_DIR,
+            f'summary_{current_scope}.csv',
+        )
+
+        if os.path.exists(path):
+            frames.append(
+                pd.read_csv(path)
+            )
+
+    if not frames:
+        return None
+
+    return pd.concat(
+        frames,
+        ignore_index=True,
+    )

@@ -45,7 +45,10 @@ ENABLED_MODELS = [
 
 # `full` is the primary dataset; `panel` is the controlled secondary analysis over tokens
 # common to all three observation windows.
-SCOPE = 'full'
+SCOPES = [
+    'full',
+    'panel',
+]
 
 EXPERIMENTS = ['q1', 'q2', 'q3']
 
@@ -101,11 +104,21 @@ def variants_for(cohort, variants):
     return variants
 
 
-def run(models=None, scope=None, experiments=None, views=None, variants=None,
-        cohorts=None, space_overrides=None, n_trials=None, n_seeds=None, reuse_best_params=False):
+def run(
+    models=None,
+    scopes=None,
+    experiments=None,
+    views=None,
+    variants=None,
+    cohorts=None,
+    space_overrides=None,
+    n_trials=None,
+    n_seeds=None,
+    reuse_best_params=False,
+):
     """Train the selected baselines across the selected datasets."""
     models = models or ENABLED_MODELS
-    scope = scope or SCOPE
+    scopes = scopes or SCOPES
     experiments = experiments or EXPERIMENTS
     cohorts = cohorts or COHORTS                                        # NEW
     views = views or VIEWS
@@ -118,36 +131,46 @@ def run(models=None, scope=None, experiments=None, views=None, variants=None,
 
     results = {}
 
-    for cohort in cohorts:                                              # NEW
-        for q in experiments:
-            for view in views:
-                for variant in variants_for(cohort, variants):          # NEW
-                    data = get_data(scope, q, view, variant=variant, cohort=cohort)  # NEW: cohort
+    for scope in scopes:
+        for cohort in cohorts:                                              # NEW
+            for q in experiments:
+                for view in views:
+                    for variant in variants_for(cohort, variants):          # NEW
+                        data = get_data(scope, q, view, variant=variant, cohort=cohort)  # NEW: cohort
 
-                    if not data.usable:
-                        print(f'\nskipping [{cohort}] {data.describe()} — insufficient training data')
-                        continue
-
-                    for name in models:
-                        if not is_available(name):
-                            print(f'\nskipping {name}: optional dependency not installed')
+                        if not data.usable:
+                            print(f'\nskipping [{cohort}] {data.describe()} — insufficient training data')
                             continue
 
-                        try:
-                            result = get(name).train(
-                                data,
-                                space=space_overrides.get(name),
-                                n_trials=n_trials,
-                                n_seeds=n_seeds,
-                                reuse_best_params=reuse_best_params,
-                            )
-                            # NEW: tag the summary so cohorts stay distinguishable
-                            result['summary'] = result['summary'].assign(cohort=cohort)
-                            results[(cohort, q, view, variant, name)] = result   # NEW: cohort in key
-                        except Exception:
-                            # One failing baseline should not lose the rest of the sweep.
-                            print(f'\n{name} failed on [{cohort}] {data.describe()}')
-                            traceback.print_exc()
+                        for name in models:
+                            if not is_available(name):
+                                print(f'\nskipping {name}: optional dependency not installed')
+                                continue
+
+                            try:
+                                result = get(name).train(
+                                    data,
+                                    space=space_overrides.get(name),
+                                    n_trials=n_trials,
+                                    n_seeds=n_seeds,
+                                    reuse_best_params=reuse_best_params,
+                                )
+                                # NEW: tag the summary so cohorts stay distinguishable
+                                result['summary'] = result['summary'].assign(cohort=cohort)
+                                results[
+                                    (
+                                        scope,
+                                        cohort,
+                                        q,
+                                        view,
+                                        variant,
+                                        name,
+                                    )
+                                ] = result
+                            except Exception:
+                                # One failing baseline should not lose the rest of the sweep.
+                                print(f'\n{name} failed on [{cohort}] {data.describe()}')
+                                traceback.print_exc()
 
     return results
 
@@ -158,7 +181,7 @@ def main():
     )
     parser.add_argument('--models', nargs='+', default=None,
                         help="model names, or 'all'")
-    parser.add_argument('--scope', default=None, choices=config.SCOPES)
+    parser.add_argument('--scopes', nargs='+', default=None, choices=config.SCOPES)
     parser.add_argument('--experiments', nargs='+', default=None, choices=config.EXPERIMENTS)
     parser.add_argument('--cohorts', nargs='+', default=None, choices=COHORTS)   # NEW
     parser.add_argument('--views', nargs='+', default=None, choices=config.VIEWS)
@@ -196,7 +219,7 @@ def main():
     if models == ['all']:
         models = ALL_MODELS
 
-    results = run(models=models, scope=args.scope, experiments=args.experiments,
+    results = run(models=models, scopes=args.scopes, experiments=args.experiments,
                   views=args.views, variants=args.variants, cohorts=args.cohorts,  # NEW
                   n_trials=args.trials, n_seeds=args.seeds, reuse_best_params=args.reuse_best_params)
 

@@ -59,9 +59,24 @@ def append_summary(
         exist_ok=True,
     )
 
+    scopes = (
+        summary['scope']
+        .dropna()
+        .astype(str)
+        .unique()
+    )
+
+    if len(scopes) != 1:
+        raise ValueError(
+            'append_summary expects exactly one scope; '
+            f'found {scopes.tolist()}'
+        )
+
+    scope = scopes[0]
+
     path = os.path.join(
         config.RESULT_DIR,
-        'summary.csv',
+        f'summary_{scope}.csv',
     )
 
     if os.path.exists(path):
@@ -108,15 +123,46 @@ def append_summary(
     return path
 
 
-def load_summary():
-    """Read the cumulative GNN summary, if it exists."""
+def load_summary(scope=None):
+    """Read one scope summary, or combine all available scope summaries."""
 
-    path = os.path.join(
-        config.RESULT_DIR,
-        'summary.csv',
-    )
+    if scope is not None:
 
-    if not os.path.exists(path):
+        if scope not in config.SCOPES:
+            raise ValueError(
+                f'unknown scope {scope!r}; '
+                f'expected one of {config.SCOPES}'
+            )
+
+        path = os.path.join(
+            config.RESULT_DIR,
+            f'summary_{scope}.csv',
+        )
+
+        return (
+            pd.read_csv(path)
+            if os.path.exists(path)
+            else None
+        )
+
+    frames = []
+
+    for current_scope in config.SCOPES:
+
+        path = os.path.join(
+            config.RESULT_DIR,
+            f'summary_{current_scope}.csv',
+        )
+
+        if os.path.exists(path):
+            frames.append(
+                pd.read_csv(path)
+            )
+
+    if not frames:
         return None
 
-    return pd.read_csv(path)
+    return pd.concat(
+        frames,
+        ignore_index=True,
+    )

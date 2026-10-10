@@ -44,7 +44,10 @@ ENABLED_MODELS = [
     'gat',
 ]
 
-SCOPE = 'full'
+SCOPES = [
+    'full',
+    'panel',
+]
 
 EXPERIMENTS = [
     'q1',
@@ -96,7 +99,7 @@ def variants_for(
 
 def run(
     models=None,
-    scope=None,
+    scopes=None,
     experiments=None,
     cohorts=None,
     feature_variants=None,
@@ -113,9 +116,9 @@ def run(
         or ENABLED_MODELS
     )
 
-    scope = (
-        scope
-        or SCOPE
+    scopes = (
+        scopes
+        or SCOPES
     )
 
     experiments = (
@@ -193,67 +196,70 @@ def run(
 
     results = {}
 
-    for cohort in cohorts:
+    for scope in scopes:
 
-        for q in experiments:
+        for cohort in cohorts:
 
-            for feature_variant in feature_variants:
+            for q in experiments:
 
-                for variant in variants_for(
-                    cohort,
-                    variants,
-                ):
+                for feature_variant in feature_variants:
 
-                    data = get_data(
-                        scope,
-                        q,
+                    for variant in variants_for(
                         cohort,
-                        variant=variant,
-                        feature_variant=feature_variant,
-                    )
+                        variants,
+                    ):
 
-                    if not data.usable:
-
-                        print(
-                            '\nskipping '
-                            f'[{cohort}] '
-                            f'{data.describe()} '
-                            '- insufficient '
-                            'training data'
+                        data = get_data(
+                            scope,
+                            q,
+                            cohort,
+                            variant=variant,
+                            feature_variant=feature_variant,
                         )
 
-                        continue
+                        if not data.usable:
 
-                    for name in models:
-
-                        result = (
-                            get(name)
-                            .train(
-                                data,
-
-                                space=(
-                                    space_overrides
-                                    .get(name)
-                                ),
-
-                                n_trials=n_trials,
-                                n_seeds=n_seeds,
-
-                                reuse_best_params=(
-                                    reuse_best_params
-                                ),
+                            print(
+                                '\nskipping '
+                                f'[{cohort}] '
+                                f'{data.describe()} '
+                                '- insufficient '
+                                'training data'
                             )
-                        )
 
-                        results[
-                            (
-                                cohort,
-                                q,
-                                feature_variant,
-                                variant,
-                                name,
+                            continue
+
+                        for name in models:
+
+                            result = (
+                                get(name)
+                                .train(
+                                    data,
+
+                                    space=(
+                                        space_overrides
+                                        .get(name)
+                                    ),
+
+                                    n_trials=n_trials,
+                                    n_seeds=n_seeds,
+
+                                    reuse_best_params=(
+                                        reuse_best_params
+                                    ),
+                                )
                             )
-                        ] = result
+
+                            results[
+                                (
+                                    scope,
+                                    cohort,
+                                    q,
+                                    feature_variant,
+                                    variant,
+                                    name,
+                                )
+                            ] = result
 
     return results
 
@@ -279,7 +285,8 @@ def main():
     )
 
     parser.add_argument(
-        '--scope',
+        '--scopes',
+        nargs='+',
         default=None,
         choices=config.SCOPES,
     )
@@ -376,7 +383,7 @@ def main():
 
     results = run(
         models=models,
-        scope=args.scope,
+        scopes=args.scopes,
         experiments=args.experiments,
         cohorts=args.cohorts,
         feature_variants=args.feature_variants,
