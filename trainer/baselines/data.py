@@ -305,6 +305,11 @@ class RunData:
     yva: np.ndarray
     Xte: np.ndarray | None
     yte: np.ndarray | None
+
+    train_token_mints: np.ndarray
+    val_token_mints: np.ndarray
+    test_token_mints: np.ndarray | None
+
     feature_names: list
     raw_features: list
     scope: str
@@ -340,6 +345,27 @@ def prepare(frame, features, add_mask=True, scope='full', experiment='q1', view=
         Xva=pre.transform_(va[features]), yva=va[config.LABEL_COL].to_numpy(int),
         Xte=pre.transform_(te[features]) if len(te) else None,
         yte=te[config.LABEL_COL].to_numpy(int) if len(te) else None,
+
+        train_token_mints=(
+            tr['token_mint']
+            .astype(str)
+            .to_numpy()
+        ),
+
+        val_token_mints=(
+            va['token_mint']
+            .astype(str)
+            .to_numpy()
+        ),
+
+        test_token_mints=(
+            te['token_mint']
+            .astype(str)
+            .to_numpy()
+            if len(te)
+            else None
+        ),
+
         feature_names=pre.output_names(),
         raw_features=list(features),
         scope=scope,

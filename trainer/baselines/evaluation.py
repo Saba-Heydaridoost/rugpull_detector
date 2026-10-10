@@ -343,6 +343,8 @@ def evaluate(
             )
 
     rows = []
+    prediction_rows = []
+
     for seed in range(n_seeds):
         predict = make_predictor(best_params, data, seed)
 
@@ -364,6 +366,107 @@ def evaluate(
                    'params': str(best_params)}
             row.update(compute_metrics(y, p, threshold))
             rows.append(row)
+
+            if partition in {'val', 'test'}:
+
+                token_mints = (
+                    data.val_token_mints
+                    if partition == 'val'
+                    else data.test_token_mints
+                )
+
+                if (
+                    token_mints is None
+                    or len(token_mints) != len(y)
+                ):
+                    raise AssertionError(
+                        f'{partition} token IDs do not align with labels'
+                    )
+
+                if len(p) != len(y):
+                    raise AssertionError(
+                        f'{partition} predictions do not align with labels'
+                    )
+
+                if not np.isfinite(
+                    np.asarray(
+                        p,
+                        dtype=float,
+                    )
+                ).all():
+                    raise FloatingPointError(
+                        f'{partition} predictions contain non-finite values'
+                    )
+
+                y_pred = (
+                    np.asarray(p)
+                    >= threshold
+                ).astype(int)
+
+                for (
+                    token_mint,
+                    y_true,
+                    y_score,
+                    y_hat,
+                ) in zip(
+                    token_mints,
+                    y,
+                    p,
+                    y_pred,
+                ):
+
+                    prediction_rows.append(
+                        {
+                            'token_mint': str(token_mint),
+                            'seed': int(seed),
+                            'partition': partition,
+                            'y_true': int(y_true),
+                            'y_score': float(y_score),
+                            'y_pred': int(y_hat),
+                            'threshold': float(threshold),
+                            'model': name,
+                            'scope': data.scope,
+                            'experiment': data.experiment,
+                            'view': data.view,
+                            'variant': data.variant,
+                            'cohort': data.cohort,
+                        }
+                    )
+
+    predictions = pd.DataFrame(
+        prediction_rows
+    )
+
+    if not predictions.empty:
+
+        if predictions.duplicated(
+            subset=[
+                'seed',
+                'partition',
+                'token_mint',
+            ]
+        ).any():
+            raise AssertionError(
+                'duplicate per-token prediction rows detected'
+            )
+
+        label_counts = (
+            predictions
+            .groupby(
+                [
+                    'partition',
+                    'token_mint',
+                ]
+            )['y_true']
+            .nunique()
+        )
+
+        if (
+            label_counts > 1
+        ).any():
+            raise AssertionError(
+                'y_true changes across seeds for the same token'
+            )
 
     runs = pd.DataFrame(rows).assign(
         scope=data.scope, experiment=data.experiment, view=data.view, variant=data.variant,
@@ -415,6 +518,11 @@ def evaluate(
             f'{run_prefix}gap_{tag}',
         )
 
+        save_table(
+            predictions,
+            f'{run_prefix}predictions_{tag}',
+        )
+
         append_summary(
             summary
         )
@@ -424,6 +532,7 @@ def evaluate(
         'best_params': best_params,
         'sweep': sweep,
         'runs': runs,
+        'predictions': predictions,
         'summary': summary,
         'gaps': gaps,
         'plot': plot_path,

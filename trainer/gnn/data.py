@@ -1546,6 +1546,10 @@ class GraphRunData:
     val_graphs: list
     test_graphs: list
 
+    train_token_mints: np.ndarray
+    val_token_mints: np.ndarray
+    test_token_mints: np.ndarray
+
     node_feature_names: list
     edge_feature_names: list
     token_feature_names: list
@@ -1745,6 +1749,63 @@ def get_data(
         'test'
     )
 
+    train_token_mints = (
+        corpus.metadata.loc[
+            corpus.metadata[
+                config.SPLIT_COL
+            ] == 'train',
+            config.TOKEN_COL,
+        ]
+        .astype(str)
+        .to_numpy()
+    )
+
+    val_token_mints = (
+        corpus.metadata.loc[
+            corpus.metadata[
+                config.SPLIT_COL
+            ] == 'val',
+            config.TOKEN_COL,
+        ]
+        .astype(str)
+        .to_numpy()
+    )
+
+    test_token_mints = (
+        corpus.metadata.loc[
+            corpus.metadata[
+                config.SPLIT_COL
+            ] == 'test',
+            config.TOKEN_COL,
+        ]
+        .astype(str)
+        .to_numpy()
+    )
+
+    if (
+        len(train_token_mints)
+        != len(train_raw)
+    ):
+        raise AssertionError(
+            'train token IDs do not align with graphs'
+        )
+
+    if (
+        len(val_token_mints)
+        != len(val_raw)
+    ):
+        raise AssertionError(
+            'validation token IDs do not align with graphs'
+        )
+
+    if (
+        len(test_token_mints)
+        != len(test_raw)
+    ):
+        raise AssertionError(
+            'test token IDs do not align with graphs'
+        )
+
     if not train_raw:
         raise ValueError(
             f'{q}/{cohort}: empty training graph partition'
@@ -1859,6 +1920,10 @@ def get_data(
         train_graphs=train_graphs,
         val_graphs=val_graphs,
         test_graphs=test_graphs,
+
+        train_token_mints=train_token_mints,
+        val_token_mints=val_token_mints,
+        test_token_mints=test_token_mints,
 
         node_feature_names=list(
             config.NODE_FEATURES
