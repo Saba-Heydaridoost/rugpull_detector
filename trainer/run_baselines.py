@@ -60,8 +60,12 @@ EXPERIMENTS = ['q1', 'q2', 'q3']
 # `baselines/config.COHORT_NODE_FILES`.
 COHORTS = list(config.COHORTS)
 
-# 'node' | 'node_matched' | 'graph' | 'node_graph'
+# 'node' | 'node_matched' | 'graph' | 'node_graph' | 'node_graph_freeze'
 VIEWS = [
+    'node',
+    'node_matched',
+    'graph',
+    'node_graph',
     'node_graph_freeze',
 ]
 
