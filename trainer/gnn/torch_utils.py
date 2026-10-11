@@ -41,6 +41,7 @@ TRAIN_KEYS = [
     'epochs',
     'batch_size',
     'patience',
+    'class_weighting',
 ]
 
 
@@ -178,6 +179,7 @@ def train_gnn_model(
     epochs=None,
     batch_size=None,
     patience=None,
+    class_weighting='none',
 ):
     """Train one GNN with early stopping on validation ROC-AUC.
 
@@ -228,7 +230,53 @@ def train_gnn_model(
         weight_decay=weight_decay,
     )
 
-    loss_fn = nn.BCEWithLogitsLoss()
+    if class_weighting == 'none':
+
+        loss_fn = nn.BCEWithLogitsLoss()
+
+    elif class_weighting == 'balanced':
+
+        y_train = np.asarray(
+            data.ytr,
+            dtype=int,
+        )
+
+        n_positive = int(
+            (y_train == 1).sum()
+        )
+
+        n_negative = int(
+            (y_train == 0).sum()
+        )
+
+        if (
+            n_positive == 0
+            or n_negative == 0
+        ):
+            raise ValueError(
+                'balanced class weighting requires '
+                'both classes in the training partition'
+            )
+
+        pos_weight = (
+            n_negative
+            / n_positive
+        )
+
+        loss_fn = nn.BCEWithLogitsLoss(
+            pos_weight=torch.tensor(
+                [pos_weight],
+                dtype=torch.float32,
+                device=DEVICE,
+            )
+        )
+
+    else:
+        raise ValueError(
+            'unknown class_weighting '
+            f'{class_weighting!r}; '
+            "expected 'none' or 'balanced'"
+        )
 
     train_loader = _loader(
         data.train_graphs,

@@ -90,6 +90,15 @@ def SPACE(
                     16,
                 ],
             ),
+
+        'class_weighting':
+            trial.suggest_categorical(
+                'class_weighting',
+                [
+                    'none',
+                    'balanced',
+                ],
+            ),
     }
 
 
