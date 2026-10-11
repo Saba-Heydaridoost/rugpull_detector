@@ -66,6 +66,7 @@ TOKEN_VARIANTS = list(
 # Primary results already exist; run only the
 # freeze-authority ablation by default.
 FEATURE_VARIANTS = [
+    'base',
     'plus_freeze_authority',
 ]
 
