@@ -1,0 +1,6 @@
+model,scope,q,view,variant,cohort,n_tokens,n_positive,n_negative,prevalence
+gradient_boosting,panel,q1,node_graph,no_mask,original,128,58,70,0.453125
+gradient_boosting,panel,q1,node_graph,with_mask,original,128,58,70,0.453125
+gradient_boosting,panel,q1,node_graph,no_mask,drop_3_or_more_missing,53,21,32,0.39622641509433965
+gradient_boosting,panel,q1,node_graph,with_mask,drop_3_or_more_missing,53,21,32,0.39622641509433965
+gradient_boosting,panel,q1,node_graph,no_mask,complete_case,22,12,10,0.5454545454545454

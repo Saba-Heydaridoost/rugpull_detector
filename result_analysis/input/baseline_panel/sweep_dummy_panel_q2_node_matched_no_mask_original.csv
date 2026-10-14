@@ -1,0 +1,2 @@
+trial,params,val_roc_auc
+0,{'strategy': 'prior'},0.5

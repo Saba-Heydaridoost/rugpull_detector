@@ -1,0 +1,2 @@
+scope,experiment_a,experiment_b,partition,n_common_tokens,n_positive,n_negative,n_seeds,n_bootstrap,ci,ap_a,ap_b,delta_ap,roc_a,roc_b,delta_roc,delta_ap_ci_low,delta_ap_ci_high,delta_roc_ci_low,delta_roc_ci_high
+panel,gradient_boosting_panel_q1_node_graph_no_mask_original,gradient_boosting_panel_q3_node_graph_no_mask_original,val,128,58,70,5,10000,0.95,0.8159249907677955,0.865450110118433,-0.049525119350637414,0.8267980295566503,0.8735467980295566,-0.04674876847290634,-0.1331945573976589,0.03616624854370865,-0.11926108374384234,0.02428571428571429

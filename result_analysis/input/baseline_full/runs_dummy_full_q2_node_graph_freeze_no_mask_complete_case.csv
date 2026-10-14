@@ -1,0 +1,11 @@
+model,seed,partition,params,roc_auc,pr_auc,f1,precision,recall,brier,threshold,scope,experiment,view,variant,cohort,n_features,n_train
+dummy,0,train,{'strategy': 'prior'},0.5,0.540268456375839,0.7015250544662309,0.540268456375839,1.0,0.2483784514211072,0.5,full,q2,node_graph_freeze,no_mask,complete_case,15,298
+dummy,0,val,{'strategy': 'prior'},0.5,0.7142857142857143,0.8333333333333334,0.7142857142857143,1.0,0.23436363870353333,0.5,full,q2,node_graph_freeze,no_mask,complete_case,15,298
+dummy,1,train,{'strategy': 'prior'},0.5,0.540268456375839,0.7015250544662309,0.540268456375839,1.0,0.2483784514211072,0.5,full,q2,node_graph_freeze,no_mask,complete_case,15,298
+dummy,1,val,{'strategy': 'prior'},0.5,0.7142857142857143,0.8333333333333334,0.7142857142857143,1.0,0.23436363870353333,0.5,full,q2,node_graph_freeze,no_mask,complete_case,15,298
+dummy,2,train,{'strategy': 'prior'},0.5,0.540268456375839,0.7015250544662309,0.540268456375839,1.0,0.2483784514211072,0.5,full,q2,node_graph_freeze,no_mask,complete_case,15,298
+dummy,2,val,{'strategy': 'prior'},0.5,0.7142857142857143,0.8333333333333334,0.7142857142857143,1.0,0.23436363870353333,0.5,full,q2,node_graph_freeze,no_mask,complete_case,15,298
+dummy,3,train,{'strategy': 'prior'},0.5,0.540268456375839,0.7015250544662309,0.540268456375839,1.0,0.2483784514211072,0.5,full,q2,node_graph_freeze,no_mask,complete_case,15,298
+dummy,3,val,{'strategy': 'prior'},0.5,0.7142857142857143,0.8333333333333334,0.7142857142857143,1.0,0.23436363870353333,0.5,full,q2,node_graph_freeze,no_mask,complete_case,15,298
+dummy,4,train,{'strategy': 'prior'},0.5,0.540268456375839,0.7015250544662309,0.540268456375839,1.0,0.2483784514211072,0.5,full,q2,node_graph_freeze,no_mask,complete_case,15,298
+dummy,4,val,{'strategy': 'prior'},0.5,0.7142857142857143,0.8333333333333334,0.7142857142857143,1.0,0.23436363870353333,0.5,full,q2,node_graph_freeze,no_mask,complete_case,15,298
