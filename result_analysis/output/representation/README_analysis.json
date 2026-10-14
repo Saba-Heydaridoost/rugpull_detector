@@ -1,0 +1,11 @@
+{
+  "source": "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\batch\\reps_1000_seed_2026\\comparison_results.csv",
+  "n_comparisons": 1080,
+  "delta_orientation": "metric(view A)-metric(view B); positive favors view A",
+  "population_warning": "All reported deltas are paired on the shared tokens. The node_graph vs node baseline is NOT a comparison across the whole node-only population.",
+  "independence_warning": "Overlapping configurations, models and cohorts are NOT independent hypothesis tests.",
+  "multiple_comparisons": "Percentile confidence intervals are exploratory and unadjusted.",
+  "scope_warning": "Full and Panel refer to different eligibility populations; do not pool their effects.",
+  "n_flag": "n_paired < 50 is flagged for sensitivity review, not automatically excluded.",
+  "interpretation": "Do not infer causal value of graph topology or superiority of GNN from feature-view ablations."
+}

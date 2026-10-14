@@ -1,0 +1,5 @@
+scope,comparison,n_configurations,n_models,n_paired_min,n_paired_max,n_low_paired,n_parent_population_differs,median_delta_ap,mean_delta_ap_descriptive,median_delta_roc,ap_point_A_better,ap_point_B_better,ap_point_tie,ap_ci_A_better,ap_ci_B_better,ap_ci_includes_zero,roc_point_A_better,roc_point_B_better,roc_point_tie,roc_ci_A_better,roc_ci_B_better,roc_ci_includes_zero
+full,cohort_matched,270,9,58,197,0,270,0.0,0.00138255647206986,0.0,134,106,30,17,7,246,125,115,30,14,6,250
+full,mask_effect,270,9,80,291,0,0,0.0,0.00042322472099220066,0.0,121,101,48,8,6,256,121,99,50,16,5,249
+panel,cohort_matched,270,9,22,53,135,270,0.0,0.0010289103332536231,0.0,126,114,30,12,9,249,107,132,31,7,2,261
+panel,mask_effect,270,9,53,128,0,0,0.0,0.002229348700452265,0.0,113,108,49,12,8,250,115,104,51,8,2,260

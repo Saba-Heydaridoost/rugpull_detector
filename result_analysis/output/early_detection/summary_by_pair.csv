@@ -1,0 +1,4 @@
+comparison,n_configurations,n_unique_models,n_paired_min,n_paired_max,median_delta_ap,mean_delta_ap_descriptive,median_delta_roc,ap_later_point,ap_earlier_point,ap_tie,ap_ci_later,ap_ci_earlier,ap_ci_includes_zero,roc_ci_later,roc_ci_earlier,roc_ci_includes_zero,n_low_paired
+q1_vs_q2,225,9,22,128,-0.0365353075940007,-0.04180313496786098,-0.0244047619047619,163,37,25,28,0,197,9,0,216,45
+q1_vs_q3,225,9,22,128,-0.0243617241200877,-0.036885481145490596,-0.0019345238095238,148,52,25,30,0,195,17,0,208,45
+q2_vs_q3,225,9,22,128,0.002511596455291,0.0049176538223703785,0.0073891625615764,85,115,25,16,17,192,13,20,192,45

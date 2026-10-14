@@ -1,0 +1,12 @@
+{
+  "source": "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\batch\\reps_1000_seed_2026\\comparison_results.csv",
+  "n_cleaning_comparisons": 1080,
+  "delta_definition": "metric(A) - metric(B); positive favors A",
+  "mask_effect": "A with_mask vs B no_mask, same cohort and matched evaluation samples",
+  "cohort_matched": "A filtered-cohort model vs B original-cohort model, evaluated on filtered shared tokens; cannot isolate effects of removing incomplete records from changes in training set",
+  "prevalence_warning": "a_prevalence/b_prevalence are original parent-cohort prevalences, not necessarily the matched comparison prevalence; paired prevalence = n_positive/n_paired",
+  "bootstrap_intervals": "Unadjusted exploratory 95% confidence intervals; no family-wise or FDR adjustment",
+  "dependence": "Comparisons share tokens and model predictions; counts of directions or intervals are NOT independent hypothesis tests",
+  "selection": "Validation-only; never use results as final held-out test evidence",
+  "small_sample": "n_paired<50 is flagged; no comparisons are silently discarded"
+}

@@ -1,3 +1,6 @@
 data_analysis/data/*/edges_with_split.parquet
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.venv/
+venv/

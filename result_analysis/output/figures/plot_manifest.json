@@ -1,0 +1,16 @@
+{
+  "batch_csv": "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\batch\\reps_1000_seed_2026\\comparison_results.csv",
+  "cross_csv": "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\cross_model_bootstrap\\cross_model_comparisons.csv",
+  "figures": [
+    "temporal_direction_counts",
+    "representation_matched_gb",
+    "cleaning_mask_gb",
+    "cross_model_all_pairs"
+  ],
+  "scope": "Validation only",
+  "intervals": "Unadjusted exploratory percentile CIs",
+  "no_pooled_ci": true,
+  "interpretation": "Per-comparison CIs only; overlapping configurations are statistically dependent.",
+  "selection": "The single-model illustration fixes Gradient Boosting; no model chosen by smallest p-value.",
+  "caution": "No claim of global superiority or final Test performance."
+}

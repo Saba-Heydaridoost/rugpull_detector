@@ -1,0 +1,11 @@
+{
+  "input": "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\batch\\reps_1000_seed_2026\\comparison_results.csv",
+  "n_temporal_rows": 675,
+  "interpretation": "delta = metric(earlier)-metric(later); negative favors later",
+  "evaluation": "Validation-only, Panel token-matched",
+  "warning": "CI intervals are exploratory and UNADJUSTED for multiple comparisons.",
+  "dependence": "Configurations share tokens and often overlapping predictions; counts are not independent significance tests.",
+  "cohorts": "Results across cohorts refer to different matched subsets; do not pool effects causally.",
+  "decision": "Counts of CI excluding zero are descriptive; do not report them as FDR-controlled discoveries.",
+  "low_n_rule": "n_paired<50 flagged (sensitivity flag, not hypothesis-test exclusion)"
+}

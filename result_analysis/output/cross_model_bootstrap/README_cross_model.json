@@ -1,0 +1,14 @@
+{
+  "input": "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\input",
+  "analysis": "Validation-only, stratified paired token bootstrap across models",
+  "comparison_specification": "Explicit CLI or user-specified manifest, never selected by this script",
+  "delta_direction": "A minus B; positive favors model_a",
+  "resampling_unit": "Unique token ID, shared across models and fitted seeds",
+  "reported_summary": "Mean per-seed AP and ROC-AUC differences",
+  "interval": "Percentile bootstrap; unadjusted for multiple comparisons",
+  "important": "Do not use rank counts or zero-excluding CIs as proof of global model superiority or unbiased Test performance",
+  "min_tokens": 30,
+  "ci": 0.95,
+  "reps": 10000,
+  "rng_seed": 2026
+}

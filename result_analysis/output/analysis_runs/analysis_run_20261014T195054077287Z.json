@@ -1,0 +1,86 @@
+{
+  "started_utc": "2026-10-14T19:50:54.077287+00:00",
+  "python": "3.10.11 (tags/v3.10.11:7d4cc5a, Apr  5 2023, 00:38:17) [MSC v.1929 64 bit (AMD64)]",
+  "root": "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis",
+  "validation_only": true,
+  "no_bootstrap_or_training": true,
+  "steps": [
+    {
+      "name": "early_detection.py",
+      "command": [
+        "C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+        "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\early_detection.py",
+        "--input",
+        "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\batch\\reps_1000_seed_2026\\comparison_results.csv",
+        "--out",
+        "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\early_detection"
+      ],
+      "exit_code": 0,
+      "output_tail": "Validated 675 temporal comparisons.\ncomparison  n_configurations  n_unique_models  n_paired_min  n_paired_max  median_delta_ap  mean_delta_ap_descriptive  median_delta_roc  ap_later_point  ap_earlier_point  ap_tie  ap_ci_later  ap_ci_earlier  ap_ci_includes_zero  roc_ci_later  roc_ci_earlier  roc_ci_includes_zero  n_low_paired\n  q1_vs_q2               225                9            22           128        -0.036535                  -0.041803         -0.024405             163                37      25           28              0                  197             9               0                   216            45\n  q1_vs_q3               225                9            22           128        -0.024362                  -0.036885         -0.001935             148                52      25           30              0                  195            17               0                   208            45\n  q2_vs_q3               225                9            22           128         0.002512                   0.004918          0.007389              85               115      25           16             17                  192            13              20                   192            45\nSaved 7 outputs to D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\early_detection\n"
+    },
+    {
+      "name": "representation_analysis.py",
+      "command": [
+        "C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+        "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\representation_analysis.py",
+        "--input",
+        "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\batch\\reps_1000_seed_2026\\comparison_results.csv",
+        "--out",
+        "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\representation"
+      ],
+      "exit_code": 0,
+      "output_tail": "Validated 1080 representation comparisons.\nscope                      comparison  n_configurations  n_models  n_paired_min  n_paired_max  n_subset_only  n_low_paired  median_delta_ap  mean_delta_ap_descriptive  median_delta_roc  ap_a_point  ap_b_point  ap_tie  ap_ci_a  ap_ci_b  ap_ci_includes_zero  roc_ci_a  roc_ci_b  roc_ci_includes_zero\n full           graph_vs_node_matched               135         9            58           167              0             0         0.037931                   0.041799      5.696164e-02         105          15      15       27        0                  108        51         0                    84\n full node_graph_freeze_vs_node_graph               135         9            58           167              0             0         0.000000                   0.001889      6.201550e-04          62          56      17        5        4                  126         0         1                   134\n full              node_graph_vs_node               135         9            58           167            135             0         0.055041                   0.055825      6.535714e-02         108          12      15       57        2                   76        70         0                    65\n full      node_graph_vs_node_matched               135         9            58           167              0             0         0.056630                   0.061264      6.893688e-02         112           8      15       62        1                   72        79         0                    56\npanel           graph_vs_node_matched               135         9            22           128              0            27         0.061743                   0.050453      5.714286e-02          92          28      15       26        3                  106        27         2                   106\npanel node_graph_freeze_vs_node_graph               135         9            22           128              0            27         0.000000                   0.001590      2.220446e-17          67          50      18        2        0                  133         1         0                   134\npanel              node_graph_vs_node               135         9            22           128              0            27         0.058597                   0.061076      4.911330e-02          96          24      15       39        2                   94        34         1                   100\npanel      node_graph_vs_node_matched               135         9            22           128              0            27         0.058597                   0.061076      4.911330e-02          96          24      15       39        2                   94        34         1                   100\nSaved 7 files to D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\representation\n"
+    },
+    {
+      "name": "cleaning_analysis.py",
+      "command": [
+        "C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+        "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\cleaning_analysis.py",
+        "--input",
+        "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\batch\\reps_1000_seed_2026\\comparison_results.csv",
+        "--out",
+        "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\cleaning_summary"
+      ],
+      "exit_code": 0,
+      "output_tail": "Validated 1080 cleaning comparisons.\nscope     comparison  n_configurations  n_models  n_paired_min  n_paired_max  n_low_paired  n_parent_population_differs  median_delta_ap  mean_delta_ap_descriptive  median_delta_roc  ap_point_A_better  ap_point_B_better  ap_point_tie  ap_ci_A_better  ap_ci_B_better  ap_ci_includes_zero  roc_point_A_better  roc_point_B_better  roc_point_tie  roc_ci_A_better  roc_ci_B_better  roc_ci_includes_zero\n full cohort_matched               270         9            58           197             0                          270              0.0                   0.001383               0.0                134                106            30              17               7                  246                 125                 115             30               14                6                   250\n full    mask_effect               270         9            80           291             0                            0              0.0                   0.000423               0.0                121                101            48               8               6                  256                 121                  99             50               16                5                   249\npanel cohort_matched               270         9            22            53           135                          270              0.0                   0.001029               0.0                126                114            30              12               9                  249                 107                 132             31                7                2                   261\npanel    mask_effect               270         9            53           128             0                            0              0.0                   0.002229               0.0                113                108            49              12               8                  250                 115                 104             51                8                2                   260\nSaved 7 outputs to D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\cleaning_summary\n"
+    },
+    {
+      "name": "plotting.py",
+      "command": [
+        "C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+        "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\plotting.py",
+        "--batch",
+        "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\batch\\reps_1000_seed_2026\\comparison_results.csv",
+        "--cross",
+        "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\cross_model_bootstrap\\cross_model_comparisons.csv",
+        "--out",
+        "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\figures"
+      ],
+      "exit_code": 0,
+      "output_tail": "Generated figures: temporal_direction_counts, representation_matched_gb, cleaning_mask_gb, cross_model_all_pairs\nEach saved as PNG and PDF in D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\figures\n"
+    }
+  ],
+  "status": "success",
+  "batch": {
+    "path": "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\batch\\reps_1000_seed_2026\\comparison_results.csv",
+    "rows": 2835,
+    "family_counts": {
+      "cleaning": 1080,
+      "representation": 1080,
+      "temporal": 675
+    },
+    "sha256": "4016bedfcb01805a5b12fc26d446990f10b9bd1805cab49c18f907961865a48c"
+  },
+  "scripts_sha256": {
+    "early_detection.py": "5e0552864511ba05b96812caa9de4819f868704542b18129f3993ec799c2e892",
+    "representation_analysis.py": "1fcfcc16ad55dd01267c48aa0da8cce3e94fa23cb1566ef29bd255aae37b28ee",
+    "cleaning_analysis.py": "6bff1e223e7f2bcbf0c36c7a9a7dce341ebb6fdf93ccb2a60f9c297ea7f0de15",
+    "plotting.py": "57eac9b1851a6ea7d9495561afce037dbbe150989fac5b46554f4ea0fd3d71c1"
+  },
+  "cross_model": {
+    "path": "D:\\RESEARCH\\Solana\\rugpull_detector\\result_analysis\\output\\cross_model_bootstrap\\cross_model_comparisons.csv",
+    "rows": 18,
+    "sha256": "86e98deb090ccad7f6d39705799afbae178cdc799efc584f3e7a751b0402b5ab"
+  },
+  "finished_utc": "2026-10-14T19:51:02.922102+00:00"
+}
