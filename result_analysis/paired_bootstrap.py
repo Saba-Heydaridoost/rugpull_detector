@@ -71,6 +71,67 @@ def scores(y, mat):
     return ap,roc
 
 
+
+def fast_scores(y, mat):
+    """
+    Vectorized AP and ROC-AUC across all seed columns.
+
+    Uses the same threshold-grouped definitions as sklearn.
+    Correctly handles tied prediction scores.
+    Requires both positive and negative labels.
+    """
+    order = np.argsort(-mat, axis=0, kind="stable")
+
+    sorted_scores = np.take_along_axis(mat, order, axis=0)
+    positives = y[order]
+
+    tp = np.cumsum(positives, axis=0)
+    fp = np.cumsum(1 - positives, axis=0)
+
+    # Only evaluate at the end of each distinct score group.
+    is_end = np.empty(sorted_scores.shape, dtype=bool)
+    is_end[-1, :] = True
+    is_end[:-1, :] = (
+        sorted_scores[:-1, :] != sorted_scores[1:, :]
+    )
+
+    tp_at_end = np.where(is_end, tp, 0)
+    fp_at_end = np.where(is_end, fp, 0)
+
+    previous_tp = np.vstack((
+        np.zeros((1, mat.shape[1]), dtype=int),
+        np.maximum.accumulate(tp_at_end, axis=0)[:-1],
+    ))
+
+    previous_fp = np.vstack((
+        np.zeros((1, mat.shape[1]), dtype=int),
+        np.maximum.accumulate(fp_at_end, axis=0)[:-1],
+    ))
+
+    group_pos = np.where(is_end, tp - previous_tp, 0)
+    group_neg = np.where(is_end, fp - previous_fp, 0)
+
+    npos = int(np.sum(y))
+    nneg = len(y) - npos
+
+    if npos == 0 or nneg == 0:
+        raise ValueError("Both classes are required for ROC-AUC")
+
+    # Non-interpolated Average Precision, matching sklearn.
+    ap = np.sum(
+        (group_pos / npos) * (tp / (tp + fp)),
+        axis=0,
+    )
+
+    # Rank-based ROC-AUC with half credit for tied scores.
+    roc = np.sum(
+        group_pos * (nneg - fp + 0.5 * group_neg),
+        axis=0,
+    ) / (npos * nneg)
+
+    return ap, roc
+
+
 def bootstrap(y,pa,pb,reps,seed,ci):
     pos=np.flatnonzero(y==1);neg=np.flatnonzero(y==0)
     rng=np.random.default_rng(seed)
@@ -81,7 +142,8 @@ def bootstrap(y,pa,pb,reps,seed,ci):
     for i in range(reps):
         idx=np.concatenate((rng.choice(pos,len(pos),replace=True),rng.choice(neg,len(neg),replace=True)))
         yy=y[idx]; a=pa[idx];b=pb[idx]
-        aa,ar=scores(yy,a);ba,br=scores(yy,b)
+        aa, ar = fast_scores(yy, a)
+        ba, br = fast_scores(yy, b)
         diffs[i]=[(aa-ba).mean(),(ar-br).mean()]
         if (i+1)%1000==0: print(f'  {i+1}/{reps} resamples',flush=True)
     alpha=(1-ci)/2
