@@ -158,7 +158,7 @@ def main():
         'prevalence_warning':'a_prevalence/b_prevalence are original parent-cohort prevalences, not necessarily the matched comparison prevalence; paired prevalence = n_positive/n_paired',
         'bootstrap_intervals':'Unadjusted exploratory 95% confidence intervals; no family-wise or FDR adjustment',
         'dependence':'Comparisons share tokens and model predictions; counts of directions or intervals are NOT independent hypothesis tests',
-        'selection':'Validation-only; never use results as final held-out test evidence',
+        'selection':'Validation is exploratory; Test is held-out only if model/comparison choices were frozen before inspection',
         'small_sample':'n_paired<50 is flagged; no comparisons are silently discarded'
     }
     (args.out/'README_analysis.json').write_text(json.dumps(note,indent=2),encoding='utf-8')

@@ -140,7 +140,7 @@ def main() -> None:
         "input":str(args.input.resolve()),
         "n_temporal_rows":len(t),
         "interpretation":"delta = metric(earlier)-metric(later); negative favors later",
-        "evaluation":"Validation-only, Panel token-matched",
+        "evaluation":"Token-matched; see source partition",
         "warning":"CI intervals are exploratory and UNADJUSTED for multiple comparisons.",
         "dependence":"Configurations share tokens and often overlapping predictions; counts are not independent significance tests.",
         "cohorts":"Results across cohorts refer to different matched subsets; do not pool effects causally.",

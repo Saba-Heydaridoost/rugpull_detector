@@ -68,6 +68,7 @@ def generate_jobs(scopes, models, qs, families):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--partition', choices=['val','test'], default='val')
     parser.add_argument('--scope', choices=['full', 'panel', 'both'], default='panel')
     parser.add_argument('--models', nargs='+', default=['gradient_boosting'],
                         help='Names or all')
@@ -94,7 +95,7 @@ def main():
         for job in jobs[:12]: print('  ', job[0], job[1], job[-2], 'VS', job[-1])
         print('Dry run: no predictions read, no outputs written.')
         return
-    out = ROOT/'output'/'batch'
+    out = ROOT/'output'/'batch' if args.partition == 'val' else ROOT/'output'/'test'/'batch'
     out.mkdir(parents=True, exist_ok=True)
     # Distinct run folder per sampling configuration to avoid mixing inference runs.
     folder = out/f'reps_{args.reps}_seed_{args.rng_seed}'
@@ -109,7 +110,7 @@ def main():
     attempts=0; successes=0; unchanged=0
     for family, comparison, scope, model, q, cohort, view, variant, a, b in jobs:
         key = family,comparison,a,b
-        if not args.force and (key in done or key in known_skips):
+        if not args.force and key in done:
             unchanged += 1
             continue
         if args.max_jobs is not None and attempts>=args.max_jobs:
@@ -117,11 +118,16 @@ def main():
         attempts+=1
         print(f'[{attempts}] {family} {a} VS {b}',flush=True)
         try:
-            result=compare(scope,a,b,args.reps,args.rng_seed)
+            result=compare(scope,a,b,args.reps,args.rng_seed,args.partition)
             old = [r for r in old if (r['family'],r['comparison'],r['experiment_a'],r['experiment_b']) != key]
             old.append({'family':family,'comparison':comparison,'model':model,'q':q,
                         'cohort':cohort,'view':view,'variant':variant,**result})
             done.add(key)
+            skipped = [
+                r for r in skipped
+                if (r['family'], r['comparison'], r['experiment_a'], r['experiment_b']) != key
+            ]
+            known_skips.discard(key)
             successes+=1
             print(f'  ΔAP={result["delta_ap"]:+.5f} CI=[{result["delta_ap_ci_low"]:+.5f},{result["delta_ap_ci_high"]:+.5f}]',flush=True)
         except (FileNotFoundError,ValueError) as exc:
@@ -133,7 +139,7 @@ def main():
         pd.DataFrame(skipped,columns=['family','comparison','experiment_a','experiment_b','reason']).to_csv(skipped_file,index=False)
     print(f'Done: {successes} new successes, {len(skipped)} skips recorded, {unchanged} already processed.')
     print('Results:',manifest)
-    print('Caution: exploratory Validation comparisons. CIs unadjusted for multiple comparisons.')
+    print(f'Partition: {args.partition}; bootstrap CIs unadjusted for multiple comparisons.')
     print('A cohort-matched contrast is NOT a causal estimate of the cleaning policy effect.')
 
 if __name__ == '__main__':

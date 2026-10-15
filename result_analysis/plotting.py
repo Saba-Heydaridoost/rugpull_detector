@@ -6,7 +6,7 @@ unadjusted percentile bootstrap CIs. No inference from pooled dependent rows.
 Usage:
     python plotting.py
     python plotting.py --batch output/batch/reps_1000_seed_2026/comparison_results.csv \
-        --cross output/cross_model_bootstrap/cross_model_comparisons.csv
+        --cross output/cross_model_bootstrap_planned/cross_model_comparisons.csv
 """
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def save(fig: plt.Figure, stem: str, out: Path) -> None:
 def interval_plot(rows: pd.DataFrame, label_col: str, *, title: str, xlabel: str,
                   stem: str, out: Path, low: str="delta_ap_ci_low",
                   high: str="delta_ap_ci_high", value: str="delta_ap",
-                  note: str="95% unadjusted bootstrap CI (exploratory); validation only") -> None:
+                  note: str="95% unadjusted token-level bootstrap CI") -> None:
     rows = rows.reset_index(drop=True)
     if rows.empty:
         raise ValueError(f"{stem}: no data")
@@ -79,7 +79,8 @@ def summary_counts(data: pd.DataFrame, *, group_col: str, order: list[str],
     for name in order:
         subset = data[data[group_col].eq(name)]
         if subset.empty:
-            raise ValueError(f"No configurations for {name}")
+            print(f"WARNING: Skipping {stem}; missing comparison: {name}")
+            return
         counts.append([
             int((subset.delta_ap < -1e-12).sum()),
             int((subset.delta_ap > 1e-12).sum()),
@@ -97,13 +98,14 @@ def summary_counts(data: pd.DataFrame, *, group_col: str, order: list[str],
     ax.set_title(title)
     ax.legend(fontsize=8)
     fig.subplots_adjust(left=0.12, right=0.97, top=0.89, bottom=0.23)
-    fig.text(.5,.06,"Dependent configurations; Validation Panel; point-estimate directions only (not a significance test).",
+    fig.text(.5,.06,"Dependent configurations; Panel; point-estimate directions only (not a significance test).",
              ha="center",va="center",fontsize=8)
     save(fig,stem,out)
 
 
 def main() -> None:
     parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--partition',choices=('val','test'),default='val')
     parser.add_argument("--batch",type=Path,default=BATCH)
     parser.add_argument("--cross",type=Path,default=CROSS)
     parser.add_argument("--out",type=Path,default=OUT)
@@ -112,10 +114,12 @@ def main() -> None:
     require(df,{"family","comparison","scope","cohort","model","view","variant",
                 "delta_ap","delta_ap_ci_low","delta_ap_ci_high","n_paired"},"batch")
     args.out.mkdir(parents=True,exist_ok=True)
+    if 'partition' in df and not df.partition.eq(args.partition).all():
+        raise ValueError('Batch partition mismatch')
 
     # All configurations: counts only, no pooled CI or composite hypothesis test.
     temporal=df[(df.family=="temporal") & (df.scope=="panel")]
-    if len(temporal)!=675:
+    if args.partition == 'val' and len(temporal)!=675:
         raise ValueError(f"Unexpected temporal comparison count: {len(temporal)} (expected 675)")
     summary_counts(temporal,group_col="comparison",order=list(LABELS),
         title="Temporal comparisons across configurations (Panel)",
@@ -124,7 +128,7 @@ def main() -> None:
     # Fixed scientific question: add graph summaries to token features on matched set.
     rep=df[(df.family=="representation") & (df.comparison=="node_graph_vs_node_matched")
            & (df.cohort=="original") & (df.variant=="no_mask")]
-    if len(rep)!=54:  # 2 scopes x 3 windows x 9 models
+    if args.partition == 'val' and len(rep)!=54:  # 2 scopes x 3 windows x 9 models
         raise ValueError(f"Expected 54 original/no-mask matched representation comparisons, found {len(rep)}")
     # Each point: median of model-specific observed differences (descriptive only).
     # To preserve actual intervals, select a named, fixed model and avoid synthesizing CIs.
@@ -139,7 +143,7 @@ def main() -> None:
     clean=df[(df.family=="cleaning") & (df.comparison=="mask_effect")
              & (df.model=="gradient_boosting") & (df.cohort=="original")
              & (df.view=="node_graph")]
-    if len(clean)!=6:
+    if args.partition == 'val' and len(clean)!=6:
         raise ValueError(f"Expected 6 mask-effect comparisons, found {len(clean)}")
     clean=clean.copy()
     clean["label"]=clean["scope"].str.title()+" / "+clean["q"].astype(str)
@@ -155,8 +159,8 @@ def main() -> None:
                     "delta_ap","delta_ap_ci_low","delta_ap_ci_high","partition","n_paired"},"cross")
         if cross.empty:
             raise ValueError("Cross-model CSV is empty")
-        if not cross.partition.eq("val").all():
-            raise ValueError("Cross-model results include non-validation data")
+        if not cross.partition.eq(args.partition).all():
+            raise ValueError(f'Cross-model results do not all belong to {args.partition}')
         if cross.duplicated(["scope","q","view","variant","cohort","model_a","model_b"]).any():
             raise ValueError("Duplicate cross-model pair")
         # Select and display ALL comparisons in the supplied manifest output;
@@ -164,20 +168,20 @@ def main() -> None:
         cross=cross.copy()
         cross["label"]=cross["q"].astype(str)+" | "+cross.model_a+" - "+cross.model_b
         cross=cross.sort_values(["q","model_a","model_b"])
-        interval_plot(cross,"label",title="Cross-model paired validation comparisons",
+        interval_plot(cross,"label",title=f'Cross-model paired {args.partition} comparisons',
             xlabel="Delta AP = AP(model A) - AP(model B)",
             stem="cross_model_all_pairs",out=args.out,
-            note="Exploratory post-hoc comparisons; unadjusted 95% CIs. Shared tokens/seeds; not independent tests.")
+            note="Unadjusted 95% CIs; fixed comparisons required on held-out Test. Shared tokens/seeds.")
         output_files.append("cross_model_all_pairs")
     else:
         print(f"Optional cross-model CSV absent: {args.cross}; cross-model figure skipped")
 
     metadata={"batch_csv":str(args.batch.resolve()),"cross_csv":str(args.cross.resolve()) if args.cross.exists() else None,
-              "figures":output_files,"scope":"Validation only", "intervals":"Unadjusted exploratory percentile CIs",
+              "figures":output_files,"scope":args.partition, "intervals":"Unadjusted exploratory percentile CIs",
               "no_pooled_ci":True,
               "interpretation":"Per-comparison CIs only; overlapping configurations are statistically dependent.",
               "selection":"The single-model illustration fixes Gradient Boosting; no model chosen by smallest p-value.",
-              "caution":"No claim of global superiority or final Test performance."}
+              "caution":"Test results are held-out only if comparisons were fixed before inspecting them."}
     (args.out/"plot_manifest.json").write_text(json.dumps(metadata,indent=2),encoding="utf-8")
     print("Generated figures:",", ".join(output_files))
     print("Each saved as PNG and PDF in",args.out)

@@ -103,22 +103,23 @@ def run_step(name: str, command: list[str], report: dict) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--batch", type=Path, default=DEFAULT_BATCH)
-    parser.add_argument("--cross", type=Path, default=DEFAULT_CROSS)
+    parser.add_argument('--partition',choices=('val','test'),default='val')
+    parser.add_argument("--batch", type=Path, default=None)
+    parser.add_argument("--cross", type=Path, default=None)
     parser.add_argument("--include-model-comparison", action="store_true")
     parser.add_argument("--allow-other-counts", action="store_true")
-    parser.add_argument("--report-dir", type=Path,
-                        default=ROOT / "output/analysis_runs")
+    parser.add_argument("--report-dir", type=Path,default=None)
     args = parser.parse_args()
-    batch = args.batch.resolve()
-    cross = args.cross.resolve()
-    report_dir = args.report_dir.resolve()
+    batch = (args.batch or (DEFAULT_BATCH if args.partition == 'val' else ROOT/'output'/'test'/'batch'/'reps_1000_seed_2026'/'comparison_results.csv')).resolve()
+    cross = (args.cross or (DEFAULT_CROSS if args.partition == 'val' else ROOT/'output'/'test'/'cross_model_bootstrap'/'cross_model_comparisons.csv')).resolve()
+    base_output = ROOT/'output' if args.partition == 'val' else ROOT/'output'/'test'
+    report_dir = (args.report_dir or base_output/'analysis_runs').resolve()
     report_dir.mkdir(parents=True, exist_ok=True)
     report = {
         "started_utc": datetime.now(timezone.utc).isoformat(),
         "python": sys.version,
         "root": str(ROOT),
-        "validation_only": True,
+        "partition":args.partition,
         "no_bootstrap_or_training": True,
         "steps": [],
         "status": "started",
@@ -172,8 +173,22 @@ def main() -> None:
     if manifest.is_file():
         report["cross_model_manifest_sha256"] = sha256(manifest)
     try:
+        # Never silently analyze Validation rows as Test (or vice versa).
+        import pandas as pd
+        checked_batch = pd.read_csv(batch, usecols=lambda c: c == "partition")
+
+        if "partition" not in checked_batch.columns:
+            if args.partition != "val":
+                raise ValueError(
+                    "Test bootstrap CSV must include a partition column."
+                )
+            print("Legacy Validation bootstrap CSV detected (no partition column).")
+        elif checked_batch.empty or not checked_batch.partition.eq(args.partition).all():
+            raise ValueError(
+                f"Bootstrap CSV contains rows outside {args.partition}"
+            )
         report["batch"] = {"path": str(batch),
-                           **validate_batch(batch, not args.allow_other_counts)}
+                           **validate_batch(batch, args.partition == 'val' and not args.allow_other_counts)}
         needed = list(CORE_SCRIPTS)
         if args.include_model_comparison:
             needed.append("model_comparison.py")
@@ -188,6 +203,9 @@ def main() -> None:
                 raise FileNotFoundError(f"Missing/empty analysis script: {path}")
         report["scripts_sha256"] = {name: sha256(ROOT / name) for name in needed}
         if cross.is_file():
+            cross_part = pd.read_csv(cross, usecols=["partition"])
+            if cross_part.empty or not cross_part.partition.eq(args.partition).all():
+                raise ValueError(f"Cross-model CSV has rows outside {args.partition}")
             with cross.open("r", encoding="utf-8-sig", newline="") as f:
                 reader = csv.DictReader(f)
                 if not {"model_a", "model_b", "delta_ap",
@@ -210,18 +228,18 @@ def main() -> None:
         ):
             run_step(name,
                      [sys.executable, str(ROOT/name), "--input", str(batch),
-                      "--out", str(ROOT/"output"/folder)],
+                      "--out", str(base_output/folder)],
                      report)
         if args.include_model_comparison:
             run_step("model_comparison.py",
                      [sys.executable, str(ROOT/"model_comparison.py"),
                       "--input", str(ROOT/"input"),
-                      "--output", str(ROOT/"output/model_comparison")],
+                      "--output", str(base_output/'model_comparison'), '--partition',args.partition],
                      report)
         run_step("plotting.py",
                  [sys.executable, str(ROOT/"plotting.py"),
                   "--batch", str(batch), "--cross", str(cross),
-                  "--out", str(ROOT/"output/figures")], report)
+                  "--out", str(base_output/'figures'), '--partition',args.partition], report)
         report["status"] = "success"
     except Exception as exc:
         report["status"] = "failed"

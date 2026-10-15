@@ -10,6 +10,7 @@ Example (execute from result_analysis):
 from __future__ import annotations
 import argparse
 from pathlib import Path
+from prediction_io import prediction_file
 import numpy as np
 import pandas as pd
 from sklearn.metrics import average_precision_score, roc_auc_score
@@ -158,7 +159,7 @@ def main():
     p.add_argument('--reps',type=int,default=10000)
     p.add_argument('--rng-seed',type=int,default=2026)
     p.add_argument('--ci',type=float,default=.95)
-    p.add_argument('--partition',choices=['val'],default='val')
+    p.add_argument('--partition',choices=['val','test'],default='val')
     p.add_argument('--output',type=Path,default=BASE/'output'/'bootstrap')
     args=p.parse_args()
     if args.reps<100 or not (0<args.ci<1):p.error('--reps must be >=100 and --ci in (0,1)')
@@ -166,12 +167,12 @@ def main():
         if '/' in stem or '\\' in stem or '..' in stem or f'_{args.scope}_' not in stem:
             p.error('Experiment stem must be a filename stem with the selected scope')
     folder=BASE/'input'/f'baseline_{args.scope}'
-    a=load_predictions(folder/f'predictions_{args.a}.csv',args.partition)
-    b=load_predictions(folder/f'predictions_{args.b}.csv',args.partition)
+    a=load_predictions(prediction_file(folder,args.a,args.partition),args.partition)
+    b=load_predictions(prediction_file(folder,args.b,args.partition),args.partition)
     ids,seeds,y,pa,pb=prepare(a,b)
     print(f'Paired tokens: {len(ids)} (positive={int(y.sum())}, negative={int((1-y).sum())}); seeds={seeds}')
     point,diffs,interval,apa,apb,roca,rocb=bootstrap(y,pa,pb,args.reps,args.rng_seed,args.ci)
-    output=args.output.resolve();output.mkdir(parents=True,exist_ok=True)
+    output=(args.output if args.partition == 'val' else BASE/'output'/'test'/'bootstrap').resolve();output.mkdir(parents=True,exist_ok=True)
     tag=f'{args.scope}__{args.a}__VS__{args.b}'
     summary=pd.DataFrame([{'scope':args.scope,'experiment_a':args.a,'experiment_b':args.b,'partition':args.partition,'n_common_tokens':len(ids),'n_positive':int(y.sum()),'n_negative':int((1-y).sum()),'n_seeds':len(seeds),'n_bootstrap':args.reps,'ci':args.ci,**point,'delta_ap_ci_low':interval[0,0],'delta_ap_ci_high':interval[1,0],'delta_roc_ci_low':interval[0,1],'delta_roc_ci_high':interval[1,1]}])
     seedwise=pd.DataFrame({'seed':seeds,'ap_a':apa,'ap_b':apb,'delta_ap':apa-apb,'roc_a':roca,'roc_b':rocb,'delta_roc':roca-rocb})

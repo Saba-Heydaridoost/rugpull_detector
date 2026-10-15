@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.metrics import average_precision_score, roc_auc_score
+from prediction_io import available_predictions
 
 ROOT = Path(__file__).resolve().parent
 EXPECTED_SEEDS = frozenset(range(5))
@@ -62,9 +63,9 @@ def parse_stem(stem: str, scope: str) -> dict:
     raise ValueError(f'Cannot parse experiment stem: {stem}')
 
 
-def validated_predictions(path: Path) -> tuple[np.ndarray,np.ndarray,np.ndarray,np.ndarray]:
+def validated_predictions(path: Path, partition: str = 'val') -> tuple[np.ndarray,np.ndarray,np.ndarray,np.ndarray]:
     df = pd.read_csv(path, usecols=['token_mint','seed','partition','y_true','y_score'],low_memory=False)
-    df = df[df.partition.eq('val')].copy()
+    df = df[df.partition.eq(partition)].copy()
     if df.empty or df[['token_mint','seed','y_true','y_score']].isna().any().any():
         raise ValueError(f'Empty/missing Validation data: {path}')
     if df.duplicated(['token_mint','seed']).any():
@@ -85,13 +86,12 @@ def validated_predictions(path: Path) -> tuple[np.ndarray,np.ndarray,np.ndarray,
     return wide.index.to_numpy(), ys.to_numpy(dtype=int), wide.to_numpy(dtype=float), np.array(wide.columns)
 
 
-def analyze_folder(folder: Path, scope: str, min_tokens: int):
-    paths = sorted(folder.glob('predictions_*.csv'))
+def analyze_folder(folder: Path, scope: str, min_tokens: int, partition: str = 'val'):
+    paths = available_predictions(folder,partition)
     if not paths:
         raise FileNotFoundError(f'No prediction CSVs in {folder}. Restore input/baseline_{scope}/ first.')
     groups: dict[tuple,dict] = {}
-    for path in paths:
-        stem = path.stem[len('predictions_'):]
+    for stem, path in paths.items():
         info = parse_stem(stem,scope)
         key = tuple(info[x] for x in ('scope','q','view','variant','cohort'))
         if info['model'] in groups.setdefault(key,{}):
@@ -104,7 +104,7 @@ def analyze_folder(folder: Path, scope: str, min_tokens: int):
         # Valid classes of configurations should have all nine models.
         if set(models) != REQUIRED_MODELS:
             raise ValueError(f'Missing models for {key}: {sorted(REQUIRED_MODELS-set(models))}')
-        loaded={m: validated_predictions(p) for m,p in sorted(models.items())}
+        loaded={m: validated_predictions(p,partition) for m,p in sorted(models.items())}
         common=set.intersection(*(set(data[0]) for data in loaded.values()))
         all_n={m:len(d[0]) for m,d in loaded.items()}
         ids=sorted(common)
@@ -142,26 +142,29 @@ def main():
     p=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--input',type=Path,default=ROOT/'input')
     p.add_argument('--output',type=Path,default=ROOT/'output'/'model_comparison')
+    p.add_argument('--partition',choices=('val','test'),default='val')
     p.add_argument('--scope',choices=('full','panel','both'),default='both')
     p.add_argument('--min-tokens',type=int,default=30,help='Sensitivity cutoff, not a statistical guarantee (default 30)')
     a=p.parse_args()
     if a.min_tokens<2:p.error('--min-tokens must be >= 2')
     records=[];diagnostics=[]
     for scope in (('full','panel') if a.scope=='both' else (a.scope,)):
-        r,d=analyze_folder(a.input/f'baseline_{scope}',scope,a.min_tokens)
+        r,d=analyze_folder(a.input/f'baseline_{scope}',scope,a.min_tokens,a.partition)
         records.extend(r);diagnostics.extend(d)
     scores=pd.DataFrame(records)
     report=pd.DataFrame(diagnostics)
     if scores.empty:raise ValueError('No eligible model comparisons; see --min-tokens and input coverage')
     scores['ap_rank_within_matched_group']=scores.groupby(['scope','q','view','variant','cohort']).ap_mean.rank(ascending=False,method='min').astype(int)
     scores['roc_rank_within_matched_group']=scores.groupby(['scope','q','view','variant','cohort']).roc_mean.rank(ascending=False,method='min').astype(int)
+    if a.partition == 'test' and a.output == ROOT/'output'/'model_comparison':
+        a.output = ROOT/'output'/'test'/'model_comparison'
     a.output.mkdir(parents=True,exist_ok=True)
     scores.to_csv(a.output/'matched_model_scores.csv',index=False)
     report.to_csv(a.output/'matched_group_coverage.csv',index=False)
-    print('Validation-only descriptive matched-token model scores:',len(scores))
+    print(f'{a.partition} descriptive matched-token model scores:',len(scores))
     print('Configurations:',len(report),'eligible:',(report.status=='ok').sum(),
           'not eligible:',(report.status!='ok').sum())
     print('Output:',a.output)
-    print('Caution: ranks are VALIDATION descriptive ranks, not independent significance tests or Test performance.')
+    print('Caution: matched descriptive ranks; only test is held-out evaluation. Model choices must be frozen in advance.')
 
 if __name__=='__main__':main()

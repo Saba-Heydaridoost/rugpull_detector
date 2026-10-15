@@ -34,6 +34,7 @@ from model_comparison import (
     validated_predictions,
 )
 from paired_bootstrap import bootstrap
+from prediction_io import prediction_file
 
 ROOT = Path(__file__).resolve().parent
 COLUMNS = ("scope", "q", "view", "variant", "cohort", "model_a", "model_b")
@@ -65,22 +66,22 @@ def experiment_stem(req: dict, model: str) -> str:
             f"{req['variant']}_{req['cohort']}")
 
 
-def get_arrays(path: Path):
+def get_arrays(path: Path, partition: str = 'val'):
     # Same strict Validation, complete-seed integrity checks as model_comparison.
-    ids, labels, mat, seeds = validated_predictions(path)
+    ids, labels, mat, seeds = validated_predictions(path,partition)
     if not np.array_equal(seeds, np.array(sorted(EXPECTED_SEEDS))):
         raise ValueError(f"Unexpected seeds: {path}")
     return ids, labels, mat
 
 
 def compute_one(req, input_dir: Path, reps: int, rng_seed: int,
-                ci: float, min_tokens: int) -> tuple[dict, pd.DataFrame]:
+                ci: float, min_tokens: int, partition: str = 'val') -> tuple[dict, pd.DataFrame]:
     r = valid_request(req)
     folder = input_dir / f"baseline_{r['scope']}"
-    pa = folder / f"predictions_{experiment_stem(r, r['model_a'])}.csv"
-    pb = folder / f"predictions_{experiment_stem(r, r['model_b'])}.csv"
-    ia, ya, sa = get_arrays(pa)
-    ib, yb, sb = get_arrays(pb)
+    pa = prediction_file(folder,experiment_stem(r,r['model_a']),partition)
+    pb = prediction_file(folder,experiment_stem(r,r['model_b']),partition)
+    ia, ya, sa = get_arrays(pa,partition)
+    ib, yb, sb = get_arrays(pb,partition)
 
     # Strict exact-token matching, not row order or sample-count equivalence.
     common = np.intersect1d(ia, ib)
@@ -106,7 +107,7 @@ def compute_one(req, input_dir: Path, reps: int, rng_seed: int,
     token_digest = hashlib.sha256(
         "\n".join(map(str, common)).encode("utf-8")
     ).hexdigest()
-    row = {**r, "partition": "val", "n_paired": len(common),
+    row = {**r, "partition": partition, "n_paired": len(common),
            "n_positive": n_pos, "n_negative": n_neg,
            "n_model_a_tokens": len(ia), "n_model_b_tokens": len(ib),
            "same_initial_population": bool(len(common) == len(ia) == len(ib)),
@@ -136,6 +137,7 @@ def compute_one(req, input_dir: Path, reps: int, rng_seed: int,
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--partition',choices=('val','test'),default='val')
     parser.add_argument("--input", type=Path, default=ROOT / "input")
     parser.add_argument("--output", type=Path, default=ROOT / "output" / "cross_model_bootstrap")
     parser.add_argument("--manifest", type=Path)
@@ -146,6 +148,8 @@ def main() -> None:
     parser.add_argument("--ci", type=float, default=0.95)
     parser.add_argument("--min-tokens", type=int, default=30)
     args = parser.parse_args()
+    if args.partition == 'test' and args.output == ROOT / 'output' / 'cross_model_bootstrap':
+        args.output = ROOT / 'output' / 'test' / 'cross_model_bootstrap'
 
     if args.reps < 100 or not 0 < args.ci < 1 or args.min_tokens < 2:
         parser.error("Require reps>=100, 0<ci<1, and min-tokens>=2")
@@ -180,7 +184,7 @@ def main() -> None:
               f"{r['model_a']} - {r['model_b']}", flush=True)
         # Deterministic local RNG, same nominal seed per comparison.
         summary, per_seed = compute_one(
-            r, args.input, args.reps, args.rng_seed, args.ci, args.min_tokens
+            r, args.input, args.reps, args.rng_seed, args.ci, args.min_tokens, args.partition
         )
         summaries.append(summary)
         seedwise.append(per_seed)
@@ -191,21 +195,21 @@ def main() -> None:
         args.output / "cross_model_seedwise.csv", index=False)
     notes = {
         "input": str(args.input.resolve()),
-        "analysis": "Validation-only, stratified paired token bootstrap across models",
+        "analysis": f"{args.partition} stratified paired token bootstrap across models",
         "comparison_specification": "Explicit CLI or user-specified manifest, never selected by this script",
         "delta_direction": "A minus B; positive favors model_a",
         "resampling_unit": "Unique token ID, shared across models and fitted seeds",
         "reported_summary": "Mean per-seed AP and ROC-AUC differences",
         "interval": "Percentile bootstrap; unadjusted for multiple comparisons",
         "important": "Do not use rank counts or zero-excluding CIs as proof of "
-                     "global model superiority or unbiased Test performance",
+                     "global model superiority; Test is held-out only with pre-specified comparisons",
         "min_tokens": args.min_tokens, "ci": args.ci,
         "reps": args.reps, "rng_seed": args.rng_seed,
     }
     (args.output / "README_cross_model.json").write_text(
         json.dumps(notes, indent=2), encoding="utf-8")
     print(f"Completed {len(summaries)} comparisons; outputs: {args.output}")
-    print("Exploratory, unadjusted percentile CIs. No Test data accessed.")
+    print(f"Partition: {args.partition}. Unadjusted bootstrap CIs; held-out Test only if all comparisons were pre-specified.")
 
 
 if __name__ == "__main__":
