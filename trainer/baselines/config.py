@@ -210,7 +210,7 @@ SEARCH_SEED = 0
 
 # The held-out partition stays frozen until the graph models are finalised as well, so
 # that the final comparison remains a single test evaluation rather than a sequence.
-EVALUATE_TEST = False
+EVALUATE_TEST = True
 
 # Minimum training rows before a configuration is attempted.
 MIN_TRAIN_ROWS = 20

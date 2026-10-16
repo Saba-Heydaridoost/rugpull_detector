@@ -4,3 +4,7 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+
+*.parquet
+*.csv
+*.png
