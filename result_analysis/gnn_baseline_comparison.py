@@ -46,7 +46,7 @@ def read_pair(row, partition, input_root):
     if r['analysis']=='early_vs_late':
         if r['scope']!='panel' or WINDOWS_ORDER[r['window_a']]>=WINDOWS_ORDER[r['window_b']]:
             raise ValueError('early_vs_late requires panel and GNN earlier than baseline')
-    sa=f"{r['model_a']}_{r['scope']}_{r['window_a']}_gnn_graph_{r['variant']}_{r['cohort']}"
+    sa=f"{r['model_a']}_{r['scope']}_{r['window_a']}_gnn_graph_structure_timing_node_graph_{r['variant']}_{r['cohort']}"
     sb=f"{r['model_b']}_{r['scope']}_{r['window_b']}_{r['view_b']}_{r['variant']}_{r['cohort']}"
     pa=prediction_file(input_root/f"gnn_{r['scope']}",sa,partition)
     pb=prediction_file(input_root/f"baseline_{r['scope']}",sb,partition)

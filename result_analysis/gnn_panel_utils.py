@@ -15,7 +15,16 @@ def load_fixed_panel(row, partition, input_root, min_tokens=30):
     loaded={}
     for window in WINDOWS:
         for family,model,view in (('gnn',row['model_a'],'gnn_graph'),('baseline',row['model_b'],row['view_b'])):
-            stem=f"{model}_panel_{window}_{view}_{row['variant']}_{row['cohort']}"
+            if family == 'gnn':
+                stem = (
+                    f"{model}_panel_{window}_gnn_graph_"
+                    f"structure_timing_node_graph_{row['variant']}_{row['cohort']}"
+                )
+            else:
+                stem = (
+                    f"{model}_panel_{window}_{view}_"
+                    f"{row['variant']}_{row['cohort']}"
+                )
             path=prediction_file(Path(input_root)/f'{family}_panel',stem,partition)
             loaded[(family,window)]=validated_predictions(path,partition)
     ids=sorted(set.intersection(*(set(x[0]) for x in loaded.values())))
