@@ -23,8 +23,8 @@ import importlib.metadata
 import platform
 
 ROOT = Path(__file__).resolve().parent
-DEFAULT_BATCH = ROOT / "output/batch/reps_1000_seed_2026/comparison_results.csv"
-DEFAULT_CROSS = ROOT / "output/cross_model_bootstrap/cross_model_comparisons.csv"
+DEFAULT_BATCH = ROOT / "output/val/batch/reps_1000_seed_2026/comparison_results.csv"
+DEFAULT_CROSS = ROOT / "output/val/cross_model_bootstrap/cross_model_comparisons.csv"
 CORE_SCRIPTS = ("early_detection.py", "representation_analysis.py",
                 "cleaning_analysis.py", "plotting.py")
 PROVENANCE_SCRIPTS = (
@@ -110,9 +110,18 @@ def main() -> None:
     parser.add_argument("--allow-other-counts", action="store_true")
     parser.add_argument("--report-dir", type=Path,default=None)
     args = parser.parse_args()
-    batch = (args.batch or (DEFAULT_BATCH if args.partition == 'val' else ROOT/'output'/'test'/'batch'/'reps_1000_seed_2026'/'comparison_results.csv')).resolve()
-    cross = (args.cross or (DEFAULT_CROSS if args.partition == 'val' else ROOT/'output'/'test'/'cross_model_bootstrap'/'cross_model_comparisons.csv')).resolve()
-    base_output = ROOT/'output' if args.partition == 'val' else ROOT/'output'/'test'
+    base_output = ROOT / 'output' / args.partition
+
+    batch = (
+        args.batch
+        or base_output / 'batch' / 'reps_1000_seed_2026' / 'comparison_results.csv'
+    ).resolve()
+
+    cross = (
+        args.cross
+        or base_output / 'cross_model_bootstrap' / 'cross_model_comparisons.csv'
+    ).resolve()
+    
     report_dir = (args.report_dir or base_output/'analysis_runs').resolve()
     report_dir.mkdir(parents=True, exist_ok=True)
     report = {
@@ -188,7 +197,7 @@ def main() -> None:
                 f"Bootstrap CSV contains rows outside {args.partition}"
             )
         report["batch"] = {"path": str(batch),
-                           **validate_batch(batch, args.partition == 'val' and not args.allow_other_counts)}
+                           **validate_batch(batch, not args.allow_other_counts)}
         needed = list(CORE_SCRIPTS)
         if args.include_model_comparison:
             needed.append("model_comparison.py")

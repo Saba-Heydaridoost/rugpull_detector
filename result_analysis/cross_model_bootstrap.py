@@ -139,7 +139,7 @@ def main() -> None:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--partition',choices=('val','test'),default='val')
     parser.add_argument("--input", type=Path, default=ROOT / "input")
-    parser.add_argument("--output", type=Path, default=ROOT / "output" / "cross_model_bootstrap")
+    parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--manifest", type=Path)
     for key in COLUMNS:
         parser.add_argument("--" + key.replace("_", "-"))
@@ -148,8 +148,13 @@ def main() -> None:
     parser.add_argument("--ci", type=float, default=0.95)
     parser.add_argument("--min-tokens", type=int, default=30)
     args = parser.parse_args()
-    if args.partition == 'test' and args.output == ROOT / 'output' / 'cross_model_bootstrap':
-        args.output = ROOT / 'output' / 'test' / 'cross_model_bootstrap'
+    
+    if args.output is None:
+        args.output = (
+            ROOT / 'output' / args.partition / 'cross_model_bootstrap'
+        )
+
+    args.output = args.output.resolve()
 
     if args.reps < 100 or not 0 < args.ci < 1 or args.min_tokens < 2:
         parser.error("Require reps>=100, 0<ci<1, and min-tokens>=2")

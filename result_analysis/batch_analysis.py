@@ -1,6 +1,6 @@
-"""Batch Validation-only paired analysis of saved baseline predictions.
+"""Batch paired analysis of saved baseline predictions.
 
-No retraining and NO Test access. Resumes previously computed comparisons.
+No retraining. Supports explicit val/test partitions. Resumes previously computed comparisons.
 Uses the exact paired token-level bootstrap in paired_bootstrap.py.
 
 Examples from result_analysis/:
@@ -10,6 +10,7 @@ Examples from result_analysis/:
 """
 from __future__ import annotations
 import argparse
+import json
 import csv
 import itertools
 from pathlib import Path
@@ -82,6 +83,8 @@ def main():
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--force', action='store_true', help='Recalculate existing comparisons')
     args = parser.parse_args()
+    if args.partition == 'test' and args.max_jobs is not None:
+        parser.error('--max-jobs is prohibited for final Test; use Validation for partial smoke tests')
     models = MODELS if args.models == ['all'] else tuple(args.models)
     qs = QS if args.qs == ['all'] else tuple(args.qs)
     if set(models) - set(MODELS): parser.error('Unknown model(s)')
@@ -95,15 +98,34 @@ def main():
         for job in jobs[:12]: print('  ', job[0], job[1], job[-2], 'VS', job[-1])
         print('Dry run: no predictions read, no outputs written.')
         return
-    out = ROOT/'output'/'batch' if args.partition == 'val' else ROOT/'output'/'test'/'batch'
+    out = ROOT / 'output' / args.partition / 'batch'
     out.mkdir(parents=True, exist_ok=True)
     # Distinct run folder per sampling configuration to avoid mixing inference runs.
     folder = out/f'reps_{args.reps}_seed_{args.rng_seed}'
     folder.mkdir(parents=True, exist_ok=True)
+    # Disallow silently mixing different Test selections/parameters in a resumable folder.
+    config_file = folder / 'run_config.json'
+    config = {'partition': args.partition, 'reps': args.reps,
+              'rng_seed': args.rng_seed, 'scope': args.scope,
+              'models': list(models), 'qs': list(qs), 'families': sorted(families)}
+    if args.partition == 'test':
+        if config_file.exists():
+            if json.loads(config_file.read_text(encoding='utf-8')) != config:
+                raise RuntimeError('Test run configuration mismatch; use a clean run directory')
+        elif (folder / 'comparison_results.csv').exists():
+            raise RuntimeError('Legacy Test resume has no run_config.json; archive it and start clean')
+        else:
+            config_file.write_text(json.dumps(config, indent=2), encoding='utf-8')
     manifest = folder/'comparison_results.csv'
     skipped_file = folder/'skipped.csv'
     keycols=['family','comparison','experiment_a','experiment_b']
     old = pd.read_csv(manifest).to_dict('records') if manifest.exists() else []
+    if args.partition == 'test':
+        for r in old:
+            if str(r.get('partition')) != 'test':
+                raise RuntimeError('Resume contains a non-Test or untagged row; use a fresh run directory')
+            if int(r.get('n_bootstrap', -1)) != args.reps:
+                raise RuntimeError('Resume bootstrap reps/seed mismatch; do not mix runs')
     done = {(str(r['family']),str(r['comparison']),str(r['experiment_a']),str(r['experiment_b'])) for r in old}
     skipped = pd.read_csv(skipped_file).to_dict('records') if skipped_file.exists() else []
     known_skips = {(str(r['family']),str(r['comparison']),str(r['experiment_a']),str(r['experiment_b'])) for r in skipped}
@@ -137,9 +159,26 @@ def main():
             print(f'  SKIPPED: {exc}',flush=True)
         pd.DataFrame(old).to_csv(manifest,index=False)
         pd.DataFrame(skipped,columns=['family','comparison','experiment_a','experiment_b','reason']).to_csv(skipped_file,index=False)
+
     print(f'Done: {successes} new successes, {len(skipped)} skips recorded, {unchanged} already processed.')
     print('Results:',manifest)
     print(f'Partition: {args.partition}; bootstrap CIs unadjusted for multiple comparisons.')
+
+    if args.partition == 'test':
+        expected = {(f, c, a, b) for f,c,scope,model,q,cohort,view,variant,a,b in jobs}
+        completed = {(str(r['family']),str(r['comparison']),str(r['experiment_a']),str(r['experiment_b'])) for r in old}
+        if len(old) != len(completed):
+            raise RuntimeError('Duplicate completed comparison keys in Test batch')
+        missing = expected - completed
+        unexpected = completed - expected
+        if missing or unexpected:
+            raise RuntimeError(f'Test batch incomplete: missing={len(missing)}, unexpected={len(unexpected)}; file={manifest}')
+    if args.partition == 'test' and skipped:
+        raise RuntimeError(
+            f"{len(skipped)} comparisons were skipped in the final Test analysis. "
+            f"Inspect {skipped_file} before accepting these results."
+        )
+
     print('A cohort-matched contrast is NOT a causal estimate of the cleaning policy effect.')
 
 if __name__ == '__main__':

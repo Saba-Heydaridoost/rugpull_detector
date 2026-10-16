@@ -141,7 +141,7 @@ def analyze_folder(folder: Path, scope: str, min_tokens: int, partition: str = '
 def main():
     p=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--input',type=Path,default=ROOT/'input')
-    p.add_argument('--output',type=Path,default=ROOT/'output'/'model_comparison')
+    p.add_argument('--output', type=Path, default=None)
     p.add_argument('--partition',choices=('val','test'),default='val')
     p.add_argument('--scope',choices=('full','panel','both'),default='both')
     p.add_argument('--min-tokens',type=int,default=30,help='Sensitivity cutoff, not a statistical guarantee (default 30)')
@@ -156,8 +156,10 @@ def main():
     if scores.empty:raise ValueError('No eligible model comparisons; see --min-tokens and input coverage')
     scores['ap_rank_within_matched_group']=scores.groupby(['scope','q','view','variant','cohort']).ap_mean.rank(ascending=False,method='min').astype(int)
     scores['roc_rank_within_matched_group']=scores.groupby(['scope','q','view','variant','cohort']).roc_mean.rank(ascending=False,method='min').astype(int)
-    if a.partition == 'test' and a.output == ROOT/'output'/'model_comparison':
-        a.output = ROOT/'output'/'test'/'model_comparison'
+    if a.output is None:
+        a.output = ROOT / 'output' / a.partition / 'model_comparison'
+
+    a.output = a.output.resolve()
     a.output.mkdir(parents=True,exist_ok=True)
     scores.to_csv(a.output/'matched_model_scores.csv',index=False)
     report.to_csv(a.output/'matched_group_coverage.csv',index=False)
@@ -167,4 +169,5 @@ def main():
     print('Output:',a.output)
     print('Caution: matched descriptive ranks; only test is held-out evaluation. Model choices must be frozen in advance.')
 
-if __name__=='__main__':main()
+if __name__=='__main__':
+    main()
