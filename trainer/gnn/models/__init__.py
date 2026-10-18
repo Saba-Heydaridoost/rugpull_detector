@@ -18,6 +18,7 @@ MODEL_MODULES = {
     'gcn': '.gcn',
     'graphsage': '.graphsage',
     'gat': '.gat',
+    'gine_time': '.gine_time',
 }
 
 REGISTRY = {

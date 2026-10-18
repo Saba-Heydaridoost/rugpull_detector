@@ -8,7 +8,7 @@ import random
 import numpy as np
 
 from . import config
-from .metrics import safe_auc
+from .metrics import selection_score
 
 
 try:
@@ -285,7 +285,7 @@ def train_gnn_model(
         seed=seed,
     )
 
-    best_auc = -np.inf
+    best_score = -np.inf
     best_state = None
     stale = 0
 
@@ -346,19 +346,20 @@ def train_gnn_model(
             batch_size=batch_size,
         )
 
-        auc = safe_auc(
+        score = selection_score(
             data.yva,
             p_val,
+            config.SELECTION_METRIC,
         )
 
         if (
-            auc
+            score
             >
-            best_auc
+            best_score
             + config.EARLY_STOP_MIN_DELTA
         ):
 
-            best_auc = auc
+            best_score = score
             stale = 0
 
             best_state = copy.deepcopy(

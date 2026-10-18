@@ -8,7 +8,7 @@ which trains one GNN and returns a callable mapping a list of graph
 samples to P(rug), plus a SPACE(trial) function describing the Optuna
 search space.
 
-Hyperparameter selection uses validation ROC-AUC. The selected
+Hyperparameter selection uses the configured validation metric. The selected
 configuration is then re-trained over several seeds.
 
 The held-out test partition remains frozen unless explicitly enabled in
@@ -38,6 +38,7 @@ from .metrics import (
     compute_metrics,
     safe_auc,
     select_threshold,
+    selection_score,
 )
 
 from .plotting import (
@@ -204,7 +205,7 @@ def search(
     n_trials=None,
     verbose=True,
 ):
-    """Tune one GNN using validation ROC-AUC and Optuna TPE."""
+    """Tune one GNN using the configured validation metric and Optuna TPE."""
 
     optuna_lib = require_optuna()
 
@@ -218,7 +219,7 @@ def search(
 
         print(
             f'tuning {n_trials} trial(s) '
-            'on validation ROC-AUC '
+            f'on validation {config.SELECTION_METRIC} '
             'with Optuna (TPE) ...'
         )
 
@@ -258,9 +259,10 @@ def search(
                 data.val_graphs
             )
 
-            auc = safe_auc(
+            score = selection_score(
                 data.yva,
                 p_val,
+                config.SELECTION_METRIC,
             )
 
         except Exception as exc:
@@ -277,9 +279,8 @@ def search(
                 optuna_lib.TrialPruned()
             ) from exc
 
-        scored[key] = auc
-
-        return auc
+        scored[key] = score
+        return score
 
     optuna_lib.logging.set_verbosity(
         optuna_lib.logging.WARNING
@@ -342,14 +343,14 @@ def search(
                             ]
                         ),
 
-                    'val_roc_auc':
+                    'val_selection_score':
                         trial.value,
                 }
                 for trial in completed
             ]
         )
         .sort_values(
-            'val_roc_auc',
+            'val_selection_score',
             ascending=False,
         )
         .reset_index(
@@ -603,7 +604,7 @@ def evaluate(
             explore = sweep.loc[
                 sweep['trial']
                 < config.N_STARTUP_TRIALS,
-                'val_roc_auc',
+                'val_selection_score',
             ]
 
             if len(explore) >= 3:
@@ -623,7 +624,8 @@ def evaluate(
             print(
                 f'\n{len(sweep)} trial(s) completed, '
                 f'best '
-                f'{sweep["val_roc_auc"].max():.4f}'
+                f'{config.SELECTION_METRIC}='
+                f'{sweep["val_selection_score"].max():.4f}'
             )
 
             print(

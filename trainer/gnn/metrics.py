@@ -124,3 +124,22 @@ def select_threshold(
         )
         for threshold in candidates
     )[1]
+
+
+def selection_score(y_true, y_prob, metric):
+    y_true = np.asarray(y_true)
+    y_prob = np.asarray(y_prob)
+
+    if not np.all(np.isfinite(y_prob)):
+        raise ValueError("Non-finite validation probabilities.")
+
+    if np.unique(y_true).size != 2:
+        raise ValueError("Validation set must contain both classes.")
+
+    if metric == "ap":
+        return float(average_precision_score(y_true, y_prob))
+
+    if metric == "roc_auc":
+        return float(roc_auc_score(y_true, y_prob))
+
+    raise ValueError(f"Unknown selection metric: {metric}")

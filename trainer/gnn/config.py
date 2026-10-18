@@ -15,6 +15,11 @@ import os
 # Paths
 # =============================================================================
 
+SELECTION_METRIC = "ap"  # "ap" or "roc_auc"
+if SELECTION_METRIC not in ("ap", "roc_auc"):
+    raise ValueError(f"Invalid SELECTION_METRIC: {SELECTION_METRIC}")
+
+
 # Anchored to trainer/, exactly as in the baseline package.
 BASE_DIR = os.path.dirname(
     os.path.dirname(
@@ -37,7 +42,7 @@ COHORT_DIR = os.path.join(
 RESULT_DIR = os.path.join(
     BASE_DIR,
     'results',
-    'gnn'
+    f'gnn_selection_{SELECTION_METRIC}'
 )
 
 PLOT_DIR = os.path.join(
@@ -49,6 +54,7 @@ PLOT_DIR = os.path.join(
 # =============================================================================
 # Dataset axes
 # =============================================================================
+
 
 EXPERIMENTS = [
     'q1',
