@@ -308,10 +308,39 @@ def search(
         ),
     )
 
+    def report_progress(
+        study,
+        trial,
+    ):
+        """One line per finished trial, so long searches show live progress."""
+
+        if not verbose:
+            return
+
+        value = (
+            f'{trial.value:.4f}'
+            if trial.value is not None
+            else trial.state.name.lower()
+        )
+
+        try:
+            best = f'{study.best_value:.4f}'
+        except ValueError:
+            best = 'n/a'
+
+        print(
+            f'  trial {trial.number + 1}/{n_trials}  '
+            f'val_{config.SELECTION_METRIC}={value}  best={best}',
+            flush=True,
+        )
+
     study.optimize(
         objective,
         n_trials=n_trials,
         timeout=config.SEARCH_TIMEOUT,
+        callbacks=[
+            report_progress,
+        ],
     )
 
     completed = [
@@ -521,13 +550,34 @@ def evaluate(
     save=True,
     plot=None,
     reuse_best_params=False,
+    refit=False,
 ):
-    """Tune on validation ROC-AUC, then repeat the winner over seeds."""
+    """Tune on validation ROC-AUC, then repeat the winner over seeds.
+
+    With `refit`, each seed is still trained on train alone, early-stopped on
+    validation, to score train and validation and to select the threshold.
+    It is then retrained on train + validation (`data.refit`) with the same
+    parameters and seed for the epoch count the early-stopped fit settled on,
+    since validation can no longer stop it. Test is scored by that model at
+    the validation threshold. Results are reported as `<name>_refit`.
+    """
 
     n_seeds = (
         config.N_SEEDS
         if n_seeds is None
         else n_seeds
+    )
+
+    if refit and data.refit is None:
+        raise ValueError(
+            'refit requested but the data carries no refit graphs; '
+            'load it with get_data(..., refit=True)'
+        )
+
+    out_name = (
+        f'{name}_refit'
+        if refit
+        else name
     )
 
     plot = (
@@ -659,6 +709,26 @@ def evaluate(
             p_val,
         )
 
+        # Under refit, test is scored by the train + validation model.
+        test_source = (
+            data.refit
+            if refit
+            else data
+        )
+
+        if refit:
+
+            predict_test = make_predictor(
+                best_params,
+                data.refit,
+                seed,
+                fixed_epochs=predict.best_epoch,
+            )
+
+        else:
+
+            predict_test = predict
+
         scored = [
             (
                 'train',
@@ -674,14 +744,14 @@ def evaluate(
 
         if (
             config.EVALUATE_TEST
-            and data.test_graphs
+            and test_source.test_graphs
         ):
 
             scored.append(
                 (
                     'test',
-                    data.test_graphs,
-                    data.yte,
+                    test_source.test_graphs,
+                    test_source.yte,
                 )
             )
 
@@ -691,19 +761,21 @@ def evaluate(
             y,
         ) in scored:
 
-            p = (
-                p_val
-                if partition == 'val'
-                else predict(graphs)
-            )
+            if partition == 'val':
+                p = p_val
+            elif partition == 'test':
+                p = predict_test(graphs)
+            else:
+                p = predict(graphs)
 
             row = {
-                'model': name,
+                'model': out_name,
                 'seed': seed,
                 'partition': partition,
                 'params': str(
                     best_params
                 ),
+                'best_epoch': predict.best_epoch,
             }
 
             row.update(
@@ -723,7 +795,7 @@ def evaluate(
                 token_mints = (
                     data.val_token_mints
                     if partition == 'val'
-                    else data.test_token_mints
+                    else test_source.test_token_mints
                 )
 
                 if (
@@ -779,7 +851,7 @@ def evaluate(
                             'threshold': float(
                                 threshold
                             ),
-                            'model': name,
+                            'model': out_name,
                             'scope': data.scope,
                             'experiment':
                                 data.experiment,
@@ -855,6 +927,9 @@ def evaluate(
         )
     )
 
+    if refit:
+        runs['n_refit'] = len(data.refit.ytr)
+
     print(
         runs[
             [
@@ -912,7 +987,7 @@ def evaluate(
 
         plot_path = plot_train_val(
             runs,
-            name,
+            out_name,
             data,
             best_params,
             save=save,
@@ -922,7 +997,7 @@ def evaluate(
     if save:
 
         tag = (
-            f'{name}_'
+            f'{out_name}_'
             f'{data.scope}_'
             f'{data.experiment}_'
             f'{data.view}_'
@@ -963,7 +1038,7 @@ def evaluate(
         )
 
     return {
-        'name': name,
+        'name': out_name,
         'best_params':
             best_params,
         'sweep':

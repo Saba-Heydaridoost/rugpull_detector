@@ -75,8 +75,8 @@ def build(params):
 
 def train(data, space=None, n_trials=None, n_seeds=None, **kw):
     require_pyg(NAME)
-    def make_predictor(params, d, seed):
-        return train_gnn_model(build(params), d, seed, **torch_train_kwargs(params))
+    def make_predictor(params, d, seed, **train_kw):
+        return train_gnn_model(build(params), d, seed, **torch_train_kwargs(params), **train_kw)
     return evaluate(
         NAME, make_predictor, space or SPACE, data,
         n_trials=N_TRIALS if n_trials is None else n_trials,

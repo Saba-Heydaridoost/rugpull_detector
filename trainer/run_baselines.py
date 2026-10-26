@@ -11,6 +11,7 @@ Command-line flags override the switchboard for one-off runs:
     python run_baselines.py --cohorts original complete_case
     python run_baselines.py --trials 120
     python run_baselines.py --list
+    python run_baselines.py --models xgboost --scopes panel --views node_graph --refit
 
 Feature selection per view lives in `baselines/config.py`.
 Hyperparameter search spaces live next to each model in `baselines/models/`, and the
@@ -96,6 +97,15 @@ SPACE_OVERRIDES = {}
 # falling back to `config.N_TRIALS`). Set it here to sweep harder or to cut a run short.
 N_TRIALS = None
 
+# Refit protocol: after the validation search, refit the selected configuration on
+# train + validation and score test with that model. The threshold is still picked on
+# validation by the train-only fit. Outputs are written under `<model>_refit`.
+REFIT = False
+
+# The torch baselines early-stop on validation, which has no held-out role once it is part
+# of the training data, so they are excluded from the refit protocol.
+REFIT_UNSUPPORTED = {'mlp', 'ft_transformer', 'autoint'}
+
 
 # =============================================================================
 # Driver
@@ -119,6 +129,7 @@ def run(
     n_trials=None,
     n_seeds=None,
     reuse_best_params=False,
+    refit=None,
 ):
     """Train the selected baselines across the selected datasets."""
     models = models or ENABLED_MODELS
@@ -129,9 +140,16 @@ def run(
     variants = variants or VARIANTS
     space_overrides = space_overrides if space_overrides is not None else SPACE_OVERRIDES
     n_trials = N_TRIALS if n_trials is None else n_trials
+    refit = REFIT if refit is None else refit
 
     for name in models:
         get(name)  # fail fast on a typo before any training starts
+
+    if refit:
+        unsupported = [m for m in models if m in REFIT_UNSUPPORTED]
+        if unsupported:
+            raise ValueError(f'refit is not supported for {unsupported}: they early-stop '
+                             'on validation')
 
     results = {}
 
@@ -140,7 +158,8 @@ def run(
             for q in experiments:
                 for view in views:
                     for variant in variants_for(cohort, variants):          # NEW
-                        data = get_data(scope, q, view, variant=variant, cohort=cohort)  # NEW: cohort
+                        data = get_data(scope, q, view, variant=variant, cohort=cohort,  # NEW: cohort
+                                        refit=refit)
 
                         if not data.usable:
                             print(f'\nskipping [{cohort}] {data.describe()} — insufficient training data')
@@ -158,6 +177,7 @@ def run(
                                     n_trials=n_trials,
                                     n_seeds=n_seeds,
                                     reuse_best_params=reuse_best_params,
+                                    refit=refit,
                                 )
                                 # NEW: tag the summary so cohorts stay distinguishable
                                 result['summary'] = result['summary'].assign(cohort=cohort)
@@ -201,6 +221,14 @@ def main():
             'hyperparameters stored by the previous run'
         ),
     )
+    parser.add_argument(
+        '--refit',
+        action='store_true',
+        help=(
+            'after selecting hyperparameters on validation, refit them on '
+            'train + validation and score test with the refitted model'
+        ),
+    )
     parser.add_argument('--list', action='store_true', help='list baselines and exit')
     args = parser.parse_args()
 
@@ -225,7 +253,8 @@ def main():
 
     results = run(models=models, scopes=args.scopes, experiments=args.experiments,
                   views=args.views, variants=args.variants, cohorts=args.cohorts,  # NEW
-                  n_trials=args.trials, n_seeds=args.seeds, reuse_best_params=args.reuse_best_params)
+                  n_trials=args.trials, n_seeds=args.seeds, reuse_best_params=args.reuse_best_params,
+                  refit=args.refit or None)
 
     if results:
         import pandas as pd

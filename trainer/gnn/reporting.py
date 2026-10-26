@@ -1,5 +1,6 @@
 """Writing GNN experiment results to disk."""
 
+import fcntl
 import os
 
 import pandas as pd
@@ -52,8 +53,40 @@ def append_summary(
     summary,
     verbose=True,
 ):
-    """Maintain one cumulative summary across separately launched GNN runs."""
+    """Maintain one cumulative summary across separately launched GNN runs.
 
+    Parallel runs share the summary file, so the read-merge-write is serialised
+    with an exclusive lock to keep concurrent writers from dropping rows.
+    """
+
+    os.makedirs(
+        config.RESULT_DIR,
+        exist_ok=True,
+    )
+
+    with open(
+        os.path.join(
+            config.RESULT_DIR,
+            '.summary.lock',
+        ),
+        'w',
+    ) as lock:
+
+        fcntl.flock(
+            lock,
+            fcntl.LOCK_EX,
+        )
+
+        return _append_summary(
+            summary,
+            verbose,
+        )
+
+
+def _append_summary(
+    summary,
+    verbose,
+):
     os.makedirs(
         config.RESULT_DIR,
         exist_ok=True,

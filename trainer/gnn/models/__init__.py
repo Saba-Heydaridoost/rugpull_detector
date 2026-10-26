@@ -19,6 +19,8 @@ MODEL_MODULES = {
     'graphsage': '.graphsage',
     'gat': '.gat',
     'gine_time': '.gine_time',
+    'dirsage': '.dirsage',
+    'dirgcn': '.dirgcn',
 }
 
 REGISTRY = {

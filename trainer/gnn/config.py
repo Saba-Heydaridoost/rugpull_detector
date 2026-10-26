@@ -27,9 +27,30 @@ BASE_DIR = os.path.dirname(
     )
 )
 
-ARTIFACT_DIR = os.path.join(
+# Which train/val/test split to train on; see baselines/config.py.
+SPLIT = os.environ.get('RUGPULL_SPLIT', 'chronological')
+
+if SPLIT not in ('chronological', 'stratified'):
+    raise ValueError(f'unknown RUGPULL_SPLIT {SPLIT!r}')
+
+ARTIFACT_DIR = (
+    os.path.join(
+        BASE_DIR,
+        'artifacts'
+    )
+    if SPLIT == 'chronological'
+    else os.path.join(
+        os.path.dirname(BASE_DIR),
+        'data_analysis',
+        'artifacts_stratified'
+    )
+)
+
+RESULT_ROOT = os.path.join(
     BASE_DIR,
-    'artifacts'
+    'results'
+    if SPLIT == 'chronological'
+    else 'results_stratified'
 )
 
 COHORT_DIR = os.path.join(
@@ -40,8 +61,7 @@ COHORT_DIR = os.path.join(
 
 # Keep GNN results separate while preserving the same output conventions.
 RESULT_DIR = os.path.join(
-    BASE_DIR,
-    'results',
+    RESULT_ROOT,
     f'gnn_selection_{SELECTION_METRIC}'
 )
 
@@ -80,6 +100,20 @@ VIEW = 'gnn_graph'
 # Token-level predictors are fused only after graph-level pooling, so their
 # semantics remain graph-level rather than being duplicated across endpoints.
 GRAPH_VARIANT = 'structure_timing_node_graph'
+
+# Graph-only ablation. When False, the pooled graph embedding is classified on its
+# own: the token-level and graph-summary predictors are not concatenated before
+# the head, so the model sees only the transfer graph and its endpoint features.
+# The evaluated token population is unchanged, so results stay matched to the
+# primary GNN. Set from run_gnn.py --graph-only rather than edited here.
+USE_GLOBAL_FEATURES = True
+
+GRAPH_ONLY_VARIANT = 'structure_timing_graph_only'
+
+GRAPH_ONLY_RESULT_DIR = os.path.join(
+    RESULT_ROOT,
+    f'gnn_graph_only_selection_{SELECTION_METRIC}'
+)
 
 # Match the baseline missingness protocol exactly.
 #

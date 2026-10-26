@@ -17,9 +17,24 @@ Examples:
     python run_gnn.py --trials 10
 
     python run_gnn.py --list
+
+Refit protocol (select on validation, refit on train + validation, score test),
+written under the model name `<model>_refit`:
+
+    python run_gnn.py --models graphsage --scopes panel --feature-variants base --refit
+
+Graph-only ablation (no token-level or graph-summary predictors in the head),
+written to results/gnn_graph_only:
+
+    python run_gnn.py --graph-only --cohorts original
+
+    python run_gnn.py --graph-only --cohorts original --reuse-best-params
+
+    python run_gnn.py --graph-only --result-dir results/my_folder
 """
 
 import argparse
+import os
 
 from gnn import config
 
@@ -77,6 +92,10 @@ COMPLETE_CASE_VARIANTS = list(
 # None -> use each model's own N_TRIALS.
 N_TRIALS = None
 
+# Refit the validation-selected configuration on train + validation before
+# scoring test. See gnn.evaluation.evaluate.
+REFIT = False
+
 
 # =============================================================================
 # Driver
@@ -98,6 +117,41 @@ def variants_for(
 
     return variants
 
+
+def is_finished(
+    name,
+    data,
+    reuse_best_params,
+    refit=False,
+):
+    """True when this cell's predictions file (written last) already exists."""
+
+    if refit:
+        name = f'{name}_refit'
+
+    tag = (
+        f'{name}_'
+        f'{data.scope}_'
+        f'{data.experiment}_'
+        f'{data.view}_'
+        f'{data.variant}_'
+        f'{data.cohort}'
+    )
+
+    run_prefix = (
+        'final_'
+        if reuse_best_params
+        else ''
+    )
+
+    return os.path.exists(
+        os.path.join(
+            config.RESULT_DIR,
+            f'{run_prefix}predictions_{tag}.csv',
+        )
+    )
+
+
 def run(
     models=None,
     scopes=None,
@@ -109,6 +163,8 @@ def run(
     n_trials=None,
     n_seeds=None,
     reuse_best_params=False,
+    skip_existing=False,
+    refit=None,
 ):
     """Train selected GNNs across selected dataset cells."""
 
@@ -152,6 +208,12 @@ def run(
         N_TRIALS
         if n_trials is None
         else n_trials
+    )
+
+    refit = (
+        REFIT
+        if refit is None
+        else refit
     )
 
     unknown_models = [
@@ -216,6 +278,7 @@ def run(
                             cohort,
                             variant=variant,
                             feature_variant=feature_variant,
+                            refit=refit,
                         )
 
                         if not data.usable:
@@ -231,6 +294,26 @@ def run(
                             continue
 
                         for name in models:
+
+                            if (
+                                skip_existing
+                                and is_finished(
+                                    name,
+                                    data,
+                                    reuse_best_params,
+                                    refit,
+                                )
+                            ):
+
+                                print(
+                                    '\nskipping '
+                                    f'{name} '
+                                    f'[{cohort}] '
+                                    f'{data.describe()} '
+                                    '- already finished'
+                                )
+
+                                continue
 
                             result = (
                                 get(name)
@@ -248,6 +331,8 @@ def run(
                                     reuse_best_params=(
                                         reuse_best_params
                                     ),
+
+                                    refit=refit,
                                 )
                             )
 
@@ -335,6 +420,25 @@ def main():
     )
 
     parser.add_argument(
+        '--skip-existing',
+        action='store_true',
+        help=(
+            'skip model/cell runs whose predictions file '
+            'already exists, to resume an interrupted run'
+        ),
+    )
+
+    parser.add_argument(
+        '--refit',
+        action='store_true',
+        help=(
+            'after selecting hyperparameters on validation, retrain them on '
+            'train + validation for the early-stopped epoch count and score '
+            'test with that model'
+        ),
+    )
+
+    parser.add_argument(
         '--list',
         action='store_true',
         help='list GNN architectures and exit',
@@ -347,7 +451,58 @@ def main():
         choices=config.FEATURE_VARIANTS,
     )
 
+    parser.add_argument(
+        '--graph-only',
+        action='store_true',
+        help=(
+            'ablation: classify the pooled graph embedding alone, without '
+            'concatenating token-level or graph-summary predictors; results go '
+            'to results/gnn_graph_only unless --result-dir is given'
+        ),
+    )
+
+    parser.add_argument(
+        '--result-dir',
+        default=None,
+        help='write results (and plots) to this folder instead of the default',
+    )
+
     args = parser.parse_args()
+
+    if args.graph_only:
+
+        # Mask indicators and freeze authority only extend the token-level block,
+        # which the graph-only model never sees; those runs would be duplicates.
+        if args.variants not in (None, ['no_mask']):
+            parser.error('--graph-only supports only --variants no_mask')
+
+        if args.feature_variants not in (None, ['base']):
+            parser.error('--graph-only supports only --feature-variants base')
+
+        args.variants = ['no_mask']
+        args.feature_variants = ['base']
+
+        config.USE_GLOBAL_FEATURES = False
+        config.RESULT_DIR = config.GRAPH_ONLY_RESULT_DIR
+
+    if args.result_dir is not None:
+        config.RESULT_DIR = os.path.abspath(
+            args.result_dir
+        )
+
+    config.PLOT_DIR = os.path.join(
+        config.RESULT_DIR,
+        'plots',
+    )
+
+    print(
+        f'results -> {config.RESULT_DIR}'
+        + (
+            '  [graph-only: no token-level or graph-summary predictors]'
+            if not config.USE_GLOBAL_FEATURES
+            else ''
+        )
+    )
 
     if (
         args.reuse_best_params
@@ -392,6 +547,8 @@ def main():
         variants=args.variants,
         n_seeds=args.seeds,
         reuse_best_params=args.reuse_best_params,
+        skip_existing=args.skip_existing,
+        refit=args.refit or None,
     )
 
     if results:

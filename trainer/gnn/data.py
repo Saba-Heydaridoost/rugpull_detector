@@ -1539,6 +1539,40 @@ class TokenFeaturePreprocessor:
 # =============================================================================
 
 @dataclass
+class GraphRefitData:
+    """Graphs for the final refit on train + validation.
+
+    Node and token preprocessors are re-fitted on the combined partition. Validation is
+    in-sample here; only the test partition is scored.
+    """
+
+    train_graphs: list
+    test_graphs: list
+
+    train_token_mints: np.ndarray
+    test_token_mints: np.ndarray
+
+    n_node_features: int
+    n_edge_features: int
+    n_token_features: int
+
+    @property
+    def ytr(self):
+        return GraphRunData._labels(
+            self.train_graphs
+        )
+
+    @property
+    def yte(self):
+        if not self.test_graphs:
+            return None
+
+        return GraphRunData._labels(
+            self.test_graphs
+        )
+
+
+@dataclass
 class GraphRunData:
     """Prepared graph datasets plus experiment context."""
 
@@ -1562,6 +1596,9 @@ class GraphRunData:
 
     node_preprocessor: NodeFeaturePreprocessor
     token_preprocessor: TokenFeaturePreprocessor
+
+    # Train + validation graphs for the refit protocol; None unless requested.
+    refit: GraphRefitData | None = None
 
     @staticmethod
     def _labels(graphs):
@@ -1600,7 +1637,11 @@ class GraphRunData:
 
     @property
     def variant(self):
-        prefix = config.GRAPH_VARIANT
+        prefix = (
+            config.GRAPH_VARIANT
+            if config.USE_GLOBAL_FEATURES
+            else config.GRAPH_ONLY_VARIANT
+        )
 
         # Keep historical primary result names unchanged.
         if self.feature_variant != 'base':
@@ -1628,6 +1669,10 @@ class GraphRunData:
 
     @property
     def n_token_features(self):
+        # Width of the auxiliary block entering the head; zero for graph-only.
+        if not config.USE_GLOBAL_FEATURES:
+            return 0
+
         return len(
             self.token_feature_names
         )
@@ -1689,7 +1734,7 @@ class GraphRunData:
             f'{self.variant} | '
             f'{self.cohort}] '
             f'{len(self.node_feature_names)} node features | '
-            f'{len(self.token_feature_names)} token features | '
+            f'{self.n_token_features} token features | '
             f'{len(self.edge_feature_names)} stored edge features | '
             f'train={len(self.train_graphs)} '
             f'(rug {rug_rate(self.train_graphs):.3f}) | '
@@ -1705,8 +1750,13 @@ def get_data(
     cohort='original',
     variant='with_mask',
     feature_variant='base',
+    refit=False,
 ):
-    """Load graphs and fit all numerical preprocessing on training only."""
+    """Load graphs and fit all numerical preprocessing on training only.
+
+    With `refit`, the returned data also carries train + validation graphs, preprocessed
+    by preprocessors fitted on that combined partition, for the final refit (`data.refit`).
+    """
 
     if feature_variant not in config.FEATURE_VARIANTS:
         raise ValueError(
@@ -1868,28 +1918,37 @@ def get_data(
                 'test ROC-AUC is undefined'
             )
 
-    node_preprocessor = (
-        NodeFeaturePreprocessor()
-        .fit(
-            train_raw
+    def fit_preprocessors(
+        graphs,
+    ):
+        node = (
+            NodeFeaturePreprocessor()
+            .fit(
+                graphs
+            )
         )
-    )
 
-    token_preprocessor = (
-        TokenFeaturePreprocessor(
-            add_mask=(
-                variant
-                == 'with_mask'
-            ),
-            columns=(
-                config.GLOBAL_FEATURE_SETS[
-                    feature_variant
-                ]
-            ),
+        token = (
+            TokenFeaturePreprocessor(
+                add_mask=(
+                    variant
+                    == 'with_mask'
+                ),
+                columns=(
+                    config.GLOBAL_FEATURE_SETS[
+                        feature_variant
+                    ]
+                ),
+            )
+            .fit(
+                graphs
+            )
         )
-        .fit(
-            train_raw
-        )
+
+        return node, token
+
+    node_preprocessor, token_preprocessor = fit_preprocessors(
+        train_raw
     )
 
     train_graphs = node_preprocessor.transform(
@@ -1915,6 +1974,49 @@ def get_data(
     test_graphs = token_preprocessor.transform(
         test_graphs
     )
+
+    refit_data = None
+
+    if refit:
+
+        trva_raw = list(train_raw) + list(val_raw)
+
+        refit_node, refit_token = fit_preprocessors(
+            trva_raw
+        )
+
+        refit_data = GraphRefitData(
+            train_graphs=refit_token.transform(
+                refit_node.transform(
+                    trva_raw
+                )
+            ),
+            test_graphs=refit_token.transform(
+                refit_node.transform(
+                    test_raw
+                )
+            ),
+
+            train_token_mints=np.concatenate(
+                [
+                    train_token_mints,
+                    val_token_mints,
+                ]
+            ),
+            test_token_mints=test_token_mints,
+
+            n_node_features=len(
+                config.NODE_FEATURES
+            ),
+            n_edge_features=len(
+                config.EDGE_FEATURES
+            ),
+            n_token_features=(
+                len(refit_token.output_names())
+                if config.USE_GLOBAL_FEATURES
+                else 0
+            ),
+        )
 
     return GraphRunData(
         train_graphs=train_graphs,
@@ -1945,4 +2047,6 @@ def get_data(
 
         node_preprocessor=node_preprocessor,
         token_preprocessor=token_preprocessor,
+
+        refit=refit_data,
     )

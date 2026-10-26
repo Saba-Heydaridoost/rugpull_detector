@@ -16,14 +16,32 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Which train/val/test split to train on, chosen with the RUGPULL_SPLIT environment
+# variable:
+#
+#   chronological -> artifacts/ exported by data_analysis/EDA.ipynb (the default)
+#   stratified    -> data_analysis/artifacts_stratified/ exported by
+#                    data_analysis/EDA_stratified.ipynb, with results kept apart
+#                    under results_stratified/
+SPLIT = os.environ.get('RUGPULL_SPLIT', 'chronological')
+
+if SPLIT not in ('chronological', 'stratified'):
+    raise ValueError(f'unknown RUGPULL_SPLIT {SPLIT!r}')
+
 # Parquet artifacts written by the data-preparation notebook.
-ARTIFACT_DIR = os.path.join(BASE_DIR, 'artifacts')
+ARTIFACT_DIR = (
+    os.path.join(BASE_DIR, 'artifacts')
+    if SPLIT == 'chronological'
+    else os.path.join(os.path.dirname(BASE_DIR), 'data_analysis', 'artifacts_stratified')
+)
 
 # Cohort folders written by the final export cell of EDA.ipynb.
 COHORT_DIR = os.path.join(ARTIFACT_DIR, 'final', 'missingness_experiments')
 
 # Where per-model runs and the cumulative summary are written.
-RESULT_DIR = os.path.join(BASE_DIR, 'results')
+RESULT_DIR = os.path.join(
+    BASE_DIR, 'results' if SPLIT == 'chronological' else 'results_stratified'
+)
 
 # Where figures are written.
 PLOT_DIR = os.path.join(RESULT_DIR, 'plots')

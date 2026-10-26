@@ -296,6 +296,24 @@ class Preprocessor:
 # =============================================================================
 
 @dataclass
+class RefitData:
+    """Design matrices for the final refit on train + validation.
+
+    The preprocessor is re-fitted on the combined partition, so imputation medians and the
+    quantile map see the same rows the model does. Validation is in-sample here; only the
+    test partition is scored.
+    """
+
+    Xtr: np.ndarray
+    ytr: np.ndarray
+    Xte: np.ndarray | None
+    yte: np.ndarray | None
+
+    train_token_mints: np.ndarray
+    test_token_mints: np.ndarray | None
+
+
+@dataclass
 class RunData:
     """Fitted design matrices plus the context needed for reporting."""
 
@@ -317,6 +335,9 @@ class RunData:
     view: str
     variant: str
     cohort: str = 'original'
+
+    # Train + validation matrices for the refit protocol; None unless requested.
+    refit: RefitData | None = None
 
     @property
     def usable(self):
@@ -376,13 +397,39 @@ def prepare(frame, features, add_mask=True, scope='full', experiment='q1', view=
     )
 
 
-def get_data(scope='full', q='q1', view='node', variant='with_mask', features=None,
-             cohort='original'):
-    """Load a view and prepare it in one call."""
-    frame, features = load_view(scope, q, view, features=features, cohort=cohort)
+def prepare_refit(frame, features, add_mask=True):
+    """Fit the preprocessor on train + validation and build the refit matrices."""
+    trva = frame[frame[config.SPLIT_COL].isin(['train', 'val'])]
+    te = frame[frame[config.SPLIT_COL] == 'test']
 
-    return prepare(
+    pre = Preprocessor(add_mask=add_mask).fit(trva[features])
+
+    return RefitData(
+        Xtr=pre.transform_(trva[features]), ytr=trva[config.LABEL_COL].to_numpy(int),
+        Xte=pre.transform_(te[features]) if len(te) else None,
+        yte=te[config.LABEL_COL].to_numpy(int) if len(te) else None,
+        train_token_mints=trva['token_mint'].astype(str).to_numpy(),
+        test_token_mints=te['token_mint'].astype(str).to_numpy() if len(te) else None,
+    )
+
+
+def get_data(scope='full', q='q1', view='node', variant='with_mask', features=None,
+             cohort='original', refit=False):
+    """Load a view and prepare it in one call.
+
+    With `refit`, the returned RunData also carries train + validation matrices for the
+    final refit (`data.refit`).
+    """
+    frame, features = load_view(scope, q, view, features=features, cohort=cohort)
+    add_mask = variant == 'with_mask'
+
+    data = prepare(
         frame, features,
-        add_mask=(variant == 'with_mask'),
+        add_mask=add_mask,
         scope=scope, experiment=q, view=view, cohort=cohort,
     )
+
+    if refit:
+        data.refit = prepare_refit(frame, features, add_mask=add_mask)
+
+    return data

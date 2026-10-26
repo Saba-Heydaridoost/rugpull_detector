@@ -252,6 +252,7 @@ def train(
         params,
         d,
         seed,
+        **train_kw,
     ):
 
         return train_gnn_model(
@@ -261,6 +262,7 @@ def train(
             **torch_train_kwargs(
                 params
             ),
+            **train_kw,
         )
 
     return evaluate(

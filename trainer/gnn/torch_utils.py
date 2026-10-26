@@ -180,6 +180,7 @@ def train_gnn_model(
     batch_size=None,
     patience=None,
     class_weighting='none',
+    fixed_epochs=None,
 ):
     """Train one GNN with early stopping on validation ROC-AUC.
 
@@ -187,7 +188,13 @@ def train_gnn_model(
     classifier whose forward(batch) method returns one logit per graph.
 
     The best validation-ROC-AUC state is restored before the prediction
-    callable is returned.
+    callable is returned. The callable's `best_epoch` attribute is the number
+    of epochs that state was trained for.
+
+    With `fixed_epochs`, validation is not used at all: the model is trained
+    for exactly that many epochs and the final state is kept. This is the
+    refit on train + validation, where the epoch count comes from the
+    early-stopped train-only fit.
     """
 
     require_pyg(
@@ -287,7 +294,11 @@ def train_gnn_model(
 
     best_score = -np.inf
     best_state = None
+    best_epoch = None
     stale = 0
+
+    if fixed_epochs is not None:
+        epochs = fixed_epochs
 
     for epoch in range(
         epochs
@@ -340,6 +351,9 @@ def train_gnn_model(
 
             optimizer.step()
 
+        if fixed_epochs is not None:
+            continue
+
         p_val = predict_graphs(
             model,
             data.val_graphs,
@@ -360,6 +374,7 @@ def train_gnn_model(
         ):
 
             best_score = score
+            best_epoch = epoch + 1
             stale = 0
 
             best_state = copy.deepcopy(
@@ -373,14 +388,20 @@ def train_gnn_model(
             if stale >= patience:
                 break
 
-    if best_state is None:
-        raise RuntimeError(
-            'training finished without a valid model state'
-        )
+    if fixed_epochs is not None:
 
-    model.load_state_dict(
-        best_state
-    )
+        best_epoch = fixed_epochs
+
+    else:
+
+        if best_state is None:
+            raise RuntimeError(
+                'training finished without a valid model state'
+            )
+
+        model.load_state_dict(
+            best_state
+        )
 
     model.eval()
 
@@ -392,6 +413,8 @@ def train_gnn_model(
             graphs,
             batch_size=batch_size,
         )
+
+    predict_proba.best_epoch = best_epoch
 
     return predict_proba
 

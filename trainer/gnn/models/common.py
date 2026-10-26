@@ -8,6 +8,8 @@ from torch_geometric.nn import (
     global_mean_pool,
 )
 
+from .. import config
+
 
 def graph_pool(
     x,
@@ -48,6 +50,9 @@ def fuse_token_features(
     batch,
 ):
     """Concatenate graph embedding with graph-level token predictors."""
+
+    if not config.USE_GLOBAL_FEATURES:
+        return graph_x
 
     token_x = batch.token_features
 

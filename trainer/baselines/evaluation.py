@@ -271,10 +271,24 @@ def evaluate(
     save=True,
     plot=None,
     reuse_best_params=False,
+    refit=False,
 ):
-    """Tune on validation ROC-AUC with Optuna, then re-run the winner over several seeds."""
+    """Tune on validation ROC-AUC with Optuna, then re-run the winner over several seeds.
+
+    With `refit`, each seed is still fitted on train alone to score train and validation
+    and to select the threshold on validation, then refitted on train + validation
+    (`data.refit`) with the same parameters and seed. Test is scored by the refitted model
+    at that threshold, since validation is in-sample once it has been trained on. Results
+    are reported under the model name `<name>_refit`.
+    """
     n_seeds = config.N_SEEDS if n_seeds is None else n_seeds
     plot = config.MAKE_PLOTS if plot is None else plot
+
+    if refit and data.refit is None:
+        raise ValueError('refit requested but the data carries no refit matrices; '
+                         'load it with get_data(..., refit=True)')
+
+    out_name = f'{name}_refit' if refit else name
 
     if verbose:
         print(f'\n{"=" * 100}')
@@ -356,13 +370,23 @@ def evaluate(
 
         scored = [('train', data.Xtr, data.ytr), ('val', None, data.yva)]
 
-        if config.EVALUATE_TEST and data.Xte is not None:
-            scored.append(('test', data.Xte, data.yte))
+        # Under refit, test is scored by the train + validation model on its own matrices.
+        test_source = data.refit if refit else data
+        predict_test = (make_predictor(best_params, data.refit, seed) if refit
+                        else predict)
+
+        if config.EVALUATE_TEST and test_source.Xte is not None:
+            scored.append(('test', test_source.Xte, test_source.yte))
 
         for partition, X, y in scored:
-            p = p_val if partition == 'val' else predict(X)
+            if partition == 'val':
+                p = p_val
+            elif partition == 'test':
+                p = predict_test(X)
+            else:
+                p = predict(X)
 
-            row = {'model': name, 'seed': seed, 'partition': partition,
+            row = {'model': out_name, 'seed': seed, 'partition': partition,
                    'params': str(best_params)}
             row.update(compute_metrics(y, p, threshold))
             rows.append(row)
@@ -372,7 +396,7 @@ def evaluate(
                 token_mints = (
                     data.val_token_mints
                     if partition == 'val'
-                    else data.test_token_mints
+                    else test_source.test_token_mints
                 )
 
                 if (
@@ -424,7 +448,7 @@ def evaluate(
                             'y_score': float(y_score),
                             'y_pred': int(y_hat),
                             'threshold': float(threshold),
-                            'model': name,
+                            'model': out_name,
                             'scope': data.scope,
                             'experiment': data.experiment,
                             'view': data.view,
@@ -474,6 +498,9 @@ def evaluate(
         n_features=data.Xtr.shape[1], n_train=len(data.ytr),
     )
 
+    if refit:
+        runs['n_refit'] = len(data.refit.ytr)
+
     print(runs[['seed', 'roc_auc', 'pr_auc', 'f1', 'precision', 'recall']])
 
     summary = summarise(runs)
@@ -488,11 +515,11 @@ def evaluate(
 
     plot_path = None
     if plot:
-        plot_path = plot_train_val(runs, name, data, best_params, save=save, verbose=verbose)
+        plot_path = plot_train_val(runs, out_name, data, best_params, save=save, verbose=verbose)
 
     if save:
         tag = (
-            f'{name}_{data.scope}_{data.experiment}_'
+            f'{out_name}_{data.scope}_{data.experiment}_'
             f'{data.view}_{data.variant}_{data.cohort}'
         )
 
@@ -528,7 +555,7 @@ def evaluate(
         )
 
     return {
-        'name': name,
+        'name': out_name,
         'best_params': best_params,
         'sweep': sweep,
         'runs': runs,
