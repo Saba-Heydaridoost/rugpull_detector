@@ -1,0 +1,25 @@
+scope,comparison,cohort,n_configurations,median_delta_ap,median_delta_roc,ap_ci_A_better,ap_ci_B_better,ap_ci_includes_zero,roc_ci_A_better,roc_ci_B_better,roc_ci_includes_zero,family,source
+full,cohort_matched,complete_case,135,0.017962311660981,0.0093749999999999,9,1,125,5,4,126,"baselines (9 models incl. dummy, 5 views pooled)",cleaning_summary/summary_by_cohort.csv
+full,cohort_matched,drop_3_or_more_missing,135,0.0,-0.0123554569935053,2,6,127,0,13,122,"baselines (9 models incl. dummy, 5 views pooled)",cleaning_summary/summary_by_cohort.csv
+full,mask_effect,drop_3_or_more_missing,135,0.0,0.0,6,4,125,11,1,123,"baselines (9 models incl. dummy, 5 views pooled)",cleaning_summary/summary_by_cohort.csv
+full,mask_effect,original,135,0.0002879367337086,0.0,10,6,119,14,0,121,"baselines (9 models incl. dummy, 5 views pooled)",cleaning_summary/summary_by_cohort.csv
+panel,cohort_matched,complete_case,135,0.0559240296439392,0.0572916666666667,8,2,125,7,3,125,"baselines (9 models incl. dummy, 5 views pooled)",cleaning_summary/summary_by_cohort.csv
+panel,cohort_matched,drop_3_or_more_missing,135,0.0,-0.0205246913580246,2,12,121,0,7,128,"baselines (9 models incl. dummy, 5 views pooled)",cleaning_summary/summary_by_cohort.csv
+panel,mask_effect,drop_3_or_more_missing,135,0.0,0.0,4,0,131,8,4,123,"baselines (9 models incl. dummy, 5 views pooled)",cleaning_summary/summary_by_cohort.csv
+panel,mask_effect,original,135,0.001285346490591,0.0,5,1,129,7,0,128,"baselines (9 models incl. dummy, 5 views pooled)",cleaning_summary/summary_by_cohort.csv
+full,cohort_matched,complete_case,24,0.026922521335616047,0.0037433155080213503,0,0,24,0,0,24,"baselines (8 models, node_graph view)",cleaning_summary/cleaning_comparisons_annotated.csv
+full,cohort_matched,drop_3_or_more_missing,24,0.0027815652710502497,-0.01728623347213085,0,1,23,0,2,22,"baselines (8 models, node_graph view)",cleaning_summary/cleaning_comparisons_annotated.csv
+full,mask_effect,drop_3_or_more_missing,24,-0.0017050841482928502,-0.00036934441366575,1,1,22,0,1,23,"baselines (8 models, node_graph view)",cleaning_summary/cleaning_comparisons_annotated.csv
+full,mask_effect,original,24,0.0062286297007307,0.00495887760038695,2,1,21,2,0,22,"baselines (8 models, node_graph view)",cleaning_summary/cleaning_comparisons_annotated.csv
+panel,cohort_matched,complete_case,24,0.045869896781787656,0.0338541666666667,0,1,23,0,1,23,"baselines (8 models, node_graph view)",cleaning_summary/cleaning_comparisons_annotated.csv
+panel,cohort_matched,drop_3_or_more_missing,24,-0.018531571710464,-0.02145061728395055,0,2,22,0,3,21,"baselines (8 models, node_graph view)",cleaning_summary/cleaning_comparisons_annotated.csv
+panel,mask_effect,drop_3_or_more_missing,24,-0.00150113757943145,5.5511151231257815e-17,1,0,23,0,0,24,"baselines (8 models, node_graph view)",cleaning_summary/cleaning_comparisons_annotated.csv
+panel,mask_effect,original,24,0.00321493647638315,0.0024301825993555,1,0,23,0,0,24,"baselines (8 models, node_graph view)",cleaning_summary/cleaning_comparisons_annotated.csv
+full,cohort_matched,complete_case,9,0.020315533633315085,-0.015864527629233495,0,0,9,0,0,9,official GNNs (GCN/GraphSAGE/GAT),paper_tables/gnn_cleaning_comparisons.csv
+full,cohort_matched,drop_3_or_more_missing,9,0.012522251418041131,-0.016975308641975294,0,2,7,0,1,8,official GNNs (GCN/GraphSAGE/GAT),paper_tables/gnn_cleaning_comparisons.csv
+full,mask_effect,drop_3_or_more_missing,9,0.0006234679770047213,-0.0032544378698224907,1,0,8,0,0,9,official GNNs (GCN/GraphSAGE/GAT),paper_tables/gnn_cleaning_comparisons.csv
+full,mask_effect,original,9,-0.0034831696272715875,0.007039187227866517,1,0,8,2,0,7,official GNNs (GCN/GraphSAGE/GAT),paper_tables/gnn_cleaning_comparisons.csv
+panel,cohort_matched,complete_case,9,-0.025908536458257192,-0.06979166666666672,0,1,8,0,2,7,official GNNs (GCN/GraphSAGE/GAT),paper_tables/gnn_cleaning_comparisons.csv
+panel,cohort_matched,drop_3_or_more_missing,9,-0.07024820719232043,-0.07716049382716055,0,2,7,0,0,9,official GNNs (GCN/GraphSAGE/GAT),paper_tables/gnn_cleaning_comparisons.csv
+panel,mask_effect,drop_3_or_more_missing,9,0.005117541159093053,0.0037037037037036978,0,0,9,0,0,9,official GNNs (GCN/GraphSAGE/GAT),paper_tables/gnn_cleaning_comparisons.csv
+panel,mask_effect,original,9,-0.002839870341946793,-0.0013426423200858738,0,0,9,0,0,9,official GNNs (GCN/GraphSAGE/GAT),paper_tables/gnn_cleaning_comparisons.csv
