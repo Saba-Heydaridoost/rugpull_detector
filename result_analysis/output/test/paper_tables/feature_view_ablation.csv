@@ -1,0 +1,52 @@
+scope,window,family,view,model (best val ROC),val ROC-AUC,n_test,n_pos,test AP,test ROC-AUC
+panel,q1,baseline,node,random_forest,0.7673152709359605,136,38,0.492 ± 0.006,0.744 ± 0.004
+panel,q1,baseline,node_matched,random_forest,0.7673152709359605,136,38,0.492 ± 0.006,0.744 ± 0.004
+panel,q1,baseline,graph,ft_transformer,0.8517241379310345,136,38,0.431 ± 0.019,0.640 ± 0.006
+panel,q1,baseline,node_graph,xgboost,0.8445320197044335,136,38,0.464 ± 0.015,0.677 ± 0.004
+panel,q1,"GNN, node_graph (official)",gnn_graph,gcn,0.8307881773399014,136,38,0.477 ± 0.036,0.669 ± 0.016
+panel,q1,"GNN, node_graph (official)",gnn_graph,graphsage,0.8529556650246306,136,38,0.522 ± 0.011,0.673 ± 0.012
+panel,q1,"GNN, node_graph (official)",gnn_graph,gat,0.8460344827586207,136,38,0.457 ± 0.023,0.657 ± 0.008
+panel,q1,"GNN, graph only",gnn_graph,gcn,0.8633497536945812,136,38,0.507 ± 0.018,0.663 ± 0.015
+panel,q1,"GNN, graph only",gnn_graph,graphsage,0.8258128078817734,136,38,0.458 ± 0.011,0.655 ± 0.024
+panel,q1,"GNN, graph only",gnn_graph,gat,0.8425862068965518,136,38,0.419 ± 0.016,0.636 ± 0.020
+panel,q2,baseline,node,xgboost,0.8380295566502463,136,38,0.383 ± 0.012,0.580 ± 0.012
+panel,q2,baseline,node_matched,xgboost,0.8380295566502463,136,38,0.383 ± 0.012,0.580 ± 0.012
+panel,q2,baseline,graph,xgboost,0.8699507389162561,136,38,0.417 ± 0.004,0.653 ± 0.003
+panel,q2,baseline,node_graph,xgboost,0.8756650246305417,136,38,0.452 ± 0.011,0.650 ± 0.006
+panel,q2,"GNN, node_graph (official)",gnn_graph,gcn,0.8530541871921183,136,38,0.473 ± 0.021,0.655 ± 0.006
+panel,q2,"GNN, node_graph (official)",gnn_graph,graphsage,0.865615763546798,136,38,0.528 ± 0.022,0.683 ± 0.013
+panel,q2,"GNN, node_graph (official)",gnn_graph,gat,0.8662561576354679,136,38,0.513 ± 0.014,0.679 ± 0.004
+panel,q2,"GNN, graph only",gnn_graph,gcn,0.8434975369458128,136,38,0.482 ± 0.007,0.653 ± 0.008
+panel,q2,"GNN, graph only",gnn_graph,graphsage,0.8504926108374384,136,38,0.497 ± 0.029,0.658 ± 0.022
+panel,q2,"GNN, graph only",gnn_graph,gat,0.8683497536945813,136,38,0.539 ± 0.006,0.686 ± 0.008
+panel,q3,baseline,node,ft_transformer,0.7765763546798029,136,38,0.412 ± 0.039,0.615 ± 0.021
+panel,q3,baseline,node_matched,ft_transformer,0.7765763546798029,136,38,0.412 ± 0.039,0.615 ± 0.021
+panel,q3,baseline,graph,gradient_boosting,0.867216748768473,136,38,0.378 ± 0.013,0.590 ± 0.008
+panel,q3,baseline,node_graph,ft_transformer,0.9062068965517242,136,38,0.508 ± 0.036,0.686 ± 0.016
+panel,q3,"GNN, node_graph (official)",gnn_graph,gcn,0.8630541871921181,136,38,0.460 ± 0.019,0.679 ± 0.004
+panel,q3,"GNN, node_graph (official)",gnn_graph,graphsage,0.8564039408866997,136,38,0.536 ± 0.009,0.693 ± 0.005
+panel,q3,"GNN, node_graph (official)",gnn_graph,gat,0.8566502463054186,136,38,0.481 ± 0.018,0.686 ± 0.007
+panel,q3,"GNN, graph only",gnn_graph,gcn,0.8302463054187192,136,38,0.424 ± 0.033,0.630 ± 0.014
+panel,q3,"GNN, graph only",gnn_graph,graphsage,0.8410837438423645,136,38,0.480 ± 0.032,0.633 ± 0.027
+panel,q3,"GNN, graph only",gnn_graph,gat,0.8492118226600986,136,38,0.450 ± 0.020,0.627 ± 0.011
+full,q1,baseline,node,gradient_boosting,0.7529236963190185,294,86,0.519 ± 0.002,0.700 ± 0.003
+full,q1,baseline,node_matched,xgboost,0.8139900903526668,159,52,0.540 ± 0.001,0.769 ± 0.001
+full,q1,baseline,graph,random_forest,0.878082191780822,159,52,0.537 ± 0.004,0.709 ± 0.001
+full,q1,baseline,node_graph,logistic_regression,0.8835616438356164,159,52,0.569 ± 0.000,0.728 ± 0.000
+full,q1,"GNN, node_graph (official)",gnn_graph,gcn,0.8787234042553193,159,52,0.604 ± 0.041,0.711 ± 0.024
+full,q1,"GNN, node_graph (official)",gnn_graph,graphsage,0.8849897988924511,159,52,0.619 ± 0.026,0.726 ± 0.006
+full,q1,"GNN, node_graph (official)",gnn_graph,gat,0.8879044010492567,159,52,0.626 ± 0.010,0.721 ± 0.012
+full,q2,baseline,node,xgboost,0.8340425531914892,279,77,0.468 ± 0.006,0.679 ± 0.003
+full,q2,baseline,node_matched,random_forest,0.823905164602839,155,47,0.475 ± 0.014,0.674 ± 0.004
+full,q2,baseline,graph,ft_transformer,0.8795530051344006,155,47,0.447 ± 0.010,0.689 ± 0.008
+full,q2,baseline,node_graph,ft_transformer,0.8787375415282392,155,47,0.476 ± 0.014,0.674 ± 0.017
+full,q2,"GNN, node_graph (official)",gnn_graph,gcn,0.8758079130172154,155,47,0.544 ± 0.029,0.707 ± 0.013
+full,q2,"GNN, node_graph (official)",gnn_graph,graphsage,0.8863787375415282,155,47,0.596 ± 0.013,0.725 ± 0.003
+full,q2,"GNN, node_graph (official)",gnn_graph,gat,0.8785865297493205,155,47,0.562 ± 0.017,0.709 ± 0.017
+full,q3,baseline,node,ft_transformer,0.7993532417757905,253,58,0.368 ± 0.011,0.592 ± 0.010
+full,q3,baseline,node_matched,ft_transformer,0.8047206761492476,145,39,0.383 ± 0.009,0.595 ± 0.013
+full,q3,baseline,graph,gradient_boosting,0.876705833848691,145,39,0.365 ± 0.009,0.610 ± 0.012
+full,q3,baseline,node_graph,mlp,0.8985363842506698,145,39,0.495 ± 0.019,0.688 ± 0.011
+full,q3,"GNN, node_graph (official)",gnn_graph,gcn,0.8742939600082458,145,39,0.493 ± 0.012,0.693 ± 0.007
+full,q3,"GNN, node_graph (official)",gnn_graph,graphsage,0.8648113790970932,145,39,0.495 ± 0.032,0.703 ± 0.004
+full,q3,"GNN, node_graph (official)",gnn_graph,gat,0.8661306947021232,145,39,0.473 ± 0.011,0.711 ± 0.004

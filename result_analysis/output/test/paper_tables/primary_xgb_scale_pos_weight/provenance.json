@@ -1,0 +1,13 @@
+{
+  "partition": "test",
+  "hypotheses": 9,
+  "endpoint": "mean seed AP difference",
+  "resampling": "stratified paired token bootstrap, one shared token draw per replicate across 5 seeds",
+  "adjustment": "Bonferroni simultaneous two-sided percentile intervals across 9 fixed contrasts",
+  "alpha": 0.05,
+  "marginal_confidence": 0.9944444444444445,
+  "bootstrap_reps": 10000,
+  "seed": 2026,
+  "caveat": "Approximate bootstrap coverage; NOT permutation inference; positive lower bound supports directional superiority, not non-inferiority or first-alert latency.",
+  "cohort": "GNN-specific six-file longitudinal token intersection; cohorts may differ by GNN"
+}

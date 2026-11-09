@@ -1,0 +1,4 @@
+window,samples,liquidity at cutoff present,t_q multiple of 60 s,upper bound: present and t_q multiple of 60 s,snapshot timestamp stored,liquidity snapshot times (tau) on unix-minute grid
+q1,1961,826,30,13,False,1.0000 of 4080
+q2,1798,1059,36,18,False,1.0000 of 4080
+q3,1573,1030,25,14,False,1.0000 of 4080

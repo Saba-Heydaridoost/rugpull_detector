@@ -1,0 +1,13 @@
+scope,window,model,trials,best trial val ROC-AUC,median trial val ROC-AUC,retrained seeds val ROC-AUC (mean),test ROC-AUC (mean),sweep source
+panel,q1,graphsage,40,0.8576354679802956,0.8496305418719212,0.8529556650246306,0.6734156820622987,trainer/results/gnn/sweep_graphsage_panel_q1_gnn_graph_structure_timing_node_graph_no_mask_original.csv
+panel,q1,xgboost,60,0.8482758620689655,0.8369458128078817,0.8445320197044335,0.6767991407089152,result_analysis/input/baseline_panel/sweep_xgboost_panel_q1_node_graph_no_mask_original.csv
+panel,q2,gat,40,0.8697044334975369,0.8637931034482759,0.8662561576354679,0.6789473684210526,trainer/results/gnn/sweep_gat_panel_q2_gnn_graph_structure_timing_node_graph_no_mask_original.csv
+panel,q2,xgboost,60,0.8766009852216748,0.8658866995073893,0.8756650246305417,0.6504296455424275,result_analysis/input/baseline_panel/sweep_xgboost_panel_q2_node_graph_no_mask_original.csv
+panel,q3,gcn,40,0.8807881773399016,0.8539408866995074,0.8630541871921181,0.6792158968850698,trainer/results/gnn/sweep_gcn_panel_q3_gnn_graph_structure_timing_node_graph_no_mask_original.csv
+panel,q3,ft_transformer,40,0.919950738916256,0.9049261083743844,0.9062068965517242,0.6856605800214822,result_analysis/input/baseline_panel/sweep_ft_transformer_panel_q3_node_graph_no_mask_original.csv
+full,q1,gat,40,0.8904109589041095,0.8797726610317692,0.8879044010492567,0.7208842559309848,trainer/results/gnn/sweep_gat_full_q1_gnn_graph_structure_timing_node_graph_no_mask_original.csv
+full,q1,logistic_regression,60,0.8835616438356164,0.878679685222967,0.8835616438356164,0.7284327821711,result_analysis/input/baseline_full/sweep_logistic_regression_full_q1_node_graph_no_mask_original.csv
+full,q2,graphsage,40,0.891271519178496,0.8859861069163395,0.8863787375415282,0.7247438928289991,trainer/results/gnn/sweep_graphsage_full_q2_gnn_graph_structure_timing_node_graph_no_mask_original.csv
+full,q2,ft_transformer,40,0.8850800362428269,0.8759438236182422,0.8787375415282392,0.6742710795902286,result_analysis/input/baseline_full/sweep_ft_transformer_full_q2_node_graph_no_mask_original.csv
+full,q3,gcn,40,0.891156462585034,0.857349000206143,0.8742939600082458,0.692573778422835,trainer/results/gnn/sweep_gcn_full_q3_gnn_graph_structure_timing_node_graph_no_mask_original.csv
+full,q3,mlp,40,0.9049680478251906,0.8899196042053185,0.8985363842506698,0.6879051765844219,result_analysis/input/baseline_full/sweep_mlp_full_q3_node_graph_no_mask_original.csv

@@ -1,0 +1,7 @@
+scope,window,family,selected (best mean val ROC-AUC),val ROC-AUC,n_test,n_pos,test AP,test ROC-AUC,source
+panel,q1,official GNN (node_graph),graphsage,0.8529556650246306,136,38,0.522 ± 0.011,0.673 ± 0.012,trainer/results/gnn/final_predictions_graphsage_panel_q1_gnn_graph_structure_timing_node_graph_no_mask_original.csv
+panel,q1,graph-only GNN,gcn,0.8633497536945812,136,38,0.507 ± 0.018,0.663 ± 0.015,trainer/results/gnn_graph_only/final_predictions_gcn_panel_q1_gnn_graph_structure_timing_graph_only_no_mask_original.csv
+panel,q2,official GNN (node_graph),gat,0.8662561576354679,136,38,0.513 ± 0.014,0.679 ± 0.004,trainer/results/gnn/final_predictions_gat_panel_q2_gnn_graph_structure_timing_node_graph_no_mask_original.csv
+panel,q2,graph-only GNN,gat,0.8683497536945813,136,38,0.539 ± 0.006,0.686 ± 0.008,trainer/results/gnn_graph_only/final_predictions_gat_panel_q2_gnn_graph_structure_timing_graph_only_no_mask_original.csv
+panel,q3,official GNN (node_graph),gcn,0.8630541871921181,136,38,0.460 ± 0.019,0.679 ± 0.004,trainer/results/gnn/final_predictions_gcn_panel_q3_gnn_graph_structure_timing_node_graph_no_mask_original.csv
+panel,q3,graph-only GNN,gat,0.8492118226600986,136,38,0.450 ± 0.020,0.627 ± 0.011,trainer/results/gnn_graph_only/final_predictions_gat_panel_q3_gnn_graph_structure_timing_graph_only_no_mask_original.csv
